@@ -10,24 +10,28 @@
 // ============================================================
 
 static volatile bool s_otaActive = false;
+static unsigned long s_lastOtaEventMs = 0;
 
 void otaInit() {
     ArduinoOTA.setHostname(OTA_HOSTNAME);
 
     ArduinoOTA.onStart([]() {
         s_otaActive = true;
+        s_lastOtaEventMs = millis();
         Serial.println("[OTA] start");
         telegramSendDebug("OTA update started", 0);
     });
 
     ArduinoOTA.onEnd([]() {
         s_otaActive = false;
+        s_lastOtaEventMs = 0;
         Serial.println("[OTA] finished");
         telegramSendDebug("OTA update finished, rebooting...", 0);
     });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
         static unsigned int lastPercent = 0;
+        s_lastOtaEventMs = millis();
         unsigned int percent = total ? (progress * 100U) / total : 0;
         if (percent >= lastPercent + 25U || percent == 100U) {
             lastPercent = percent;
@@ -38,6 +42,7 @@ void otaInit() {
 
     ArduinoOTA.onError([](ota_error_t error) {
         s_otaActive = false;
+        s_lastOtaEventMs = 0;
         const char* name = "UNKNOWN";
         switch (error) {
             case OTA_AUTH_ERROR:    name = "AUTH_ERROR";    break;
@@ -48,6 +53,15 @@ void otaInit() {
         }
         String msg = "[OTA] error " + String(static_cast<int>(error)) + " (" + name + ")";
         Serial.println(msg);
+        telegramSendDebug(msg, 0);
+
+        // Retry mechanism for transient errors
+        if (error == OTA_CONNECT_ERROR || error == OTA_RECEIVE_ERROR) {
+            Serial.println("[OTA] Retrying OTA update...");
+            telegramSendDebug("[OTA] Retrying OTA update...", 0);
+            delay(5000); // Wait before retrying
+            ArduinoOTA.begin(); // Restart OTA process
+        }
     });
 
     ArduinoOTA.begin();
@@ -56,6 +70,18 @@ void otaInit() {
 
 void otaLoop() {
     ArduinoOTA.handle();
+
+    if (!s_otaActive) return;
+
+    const unsigned long stallTimeoutMs = static_cast<unsigned long>(OTA_STALL_TIMEOUT_SEC) * 1000UL;
+    if (s_lastOtaEventMs == 0 || (millis() - s_lastOtaEventMs) <= stallTimeoutMs) return;
+
+    s_otaActive = false;
+    s_lastOtaEventMs = 0;
+    telegramSendDebug("[OTA] transfer stalled, restarting device", 0);
+    Serial.println("[OTA] transfer stalled, restarting device");
+    delay(100);
+    ESP.restart();
 }
 
 bool otaIsActive() {

@@ -9,7 +9,8 @@
 // ============================================================
 
 // Start WiFi connection / captive portal.
-// Opens an AP portal when no saved credentials exist.
+// Opens an AP portal when enabled and no saved credentials exist.
+// In fail-fast mode it only attempts STA reconnect and returns quickly on failure.
 // Portal is reachable at the AP IP (default 192.168.4.1).
 // Returns true on successful connection, false on timeout/error.
 bool wifiInit();

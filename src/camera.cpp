@@ -1,6 +1,7 @@
 #include "camera.h"
 #include "wifi_manager.h"
 #include "telegram.h"
+#include "config.h"
 
 #include <Arduino.h>
 #include "esp_camera.h"
@@ -248,6 +249,9 @@ bool cameraSendPhoto(const char* chatId) {
     String head = "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n" +
         String(chatId) + "\r\n"
+        "--" + boundary + "\r\n"
+        "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" +
+        String("Cam: ") + String(CAMERA_LABEL) + "\r\n"
         "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"photo\"; filename=\"nest.jpg\"\r\n"
         "Content-Type: image/jpeg\r\n\r\n";

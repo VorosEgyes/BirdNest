@@ -53,6 +53,26 @@ static void onSaveConfig() {
 bool wifiInit() {
     loadFromNVS();
 
+    // Remote deployment mode: avoid long-lived captive portal sessions.
+    if (WIFI_ENABLE_CAPTIVE_PORTAL == 0) {
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(); // Use credentials saved by WiFi stack
+
+        unsigned long start = millis();
+        const unsigned long timeoutMs = static_cast<unsigned long>(WIFI_FAIL_FAST_SEC) * 1000UL;
+        while (WiFi.status() != WL_CONNECTED && (millis() - start) < timeoutMs) {
+            delay(100);
+        }
+
+        if (WiFi.status() != WL_CONNECTED) {
+            return false;
+        }
+
+        // OTA is sensitive to modem sleep on ESP32-CAM. Keep the radio fully awake.
+        WiFi.setSleep(false);
+        return true;
+    }
+
     WiFiManager wm;
     wm.setConfigPortalTimeout(CONFIG_PORTAL_TIMEOUT);
     wm.setSaveConfigCallback(onSaveConfig);

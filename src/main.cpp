@@ -193,6 +193,17 @@ void setup() {
     telegramSetPhotoCallback(onPhotoRequest);
     telegramSetSleepCallback(onSleepRequest);
 
+    // DS18B20 diagnostics via Telegram (tempInit() already ran before WiFi)
+    {
+        uint8_t cnt = tempGetSensorCount();
+        float   t   = tempRead();
+        String diagMsg = "DS18B20 diag:\n"
+                         "Sensors found: " + String(cnt) + "\n"
+                         "Parasite power: " + String(tempIsParasitePower() ? "YES" : "NO") + "\n"
+                         "Temp: " + (cnt > 0 ? String(t, 1) + " C" : "N/A");
+        telegramSendDebug(diagMsg, 0);
+    }
+
     // Process queued commands first (e.g. /maint_on while device was sleeping)
     // so runtime flags are up to date before any sleep decision.
     telegramProcessStartupMessages();
@@ -222,16 +233,28 @@ void setup() {
          if (!ok) telegramSendDebug("Welcome message send failed");
      }
 
-    // Take a photo: on every startup, whether from deep sleep or first boot
+    // Take a photo on startup unless maintenance mode is enabled.
     if (getChatId() && getChatId()[0] != '\0') {
-         Serial.println("[PHOTO] starting capture...");
-         telegramSendDebug("📸 Capturing photo...", 1);
-        if (!captureAndSendPhoto(getChatId(), true)) {
-            String msg = fromSleep ? "[wakeup] Photo capture/send failed." : "[startup] Photo capture/send failed.";
-            telegramSend(getChatId(), msg);
-            telegramSendDebug("📸 Photo send failed", 1);
+        if (maintMode) {
+            Serial.println("[PHOTO] startup capture skipped (maintenance mode)");
+            telegramSendDebug("📸 Startup photo skipped (maintenance mode)", 1);
         } else {
-            telegramSendDebug("📸 Photo sent", 1);
+            // Ensure no photos are sent in maintenance mode
+            if (getChatId() && getChatId()[0] != '\0' && !maintMode) {
+                if (fromSleep) {
+                    Serial.println("[PHOTO] starting capture...");
+                    telegramSendDebug("📸 Capturing photo...", 1);
+                    if (!captureAndSendPhoto(getChatId(), true)) {
+                        String msg = "[wakeup] Photo capture/send failed.";
+                        telegramSend(getChatId(), msg);
+                        telegramSendDebug("📸 Photo send failed", 1);
+                    } else {
+                        telegramSendDebug("📸 Photo sent", 1);
+                    }
+                }
+            } else {
+                Serial.println("[PHOTO] skipped due to maintenance mode");
+            }
         }
     }
 

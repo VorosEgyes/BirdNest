@@ -10,11 +10,20 @@
 #ifndef AP_NAME
   #define AP_NAME "BirdNestCam"
 #endif
+#ifndef CAMERA_LABEL
+  #define CAMERA_LABEL AP_NAME
+#endif
 #ifndef AP_PASSWORD
   #define AP_PASSWORD "birdnest123"
 #endif
 #ifndef CONFIG_PORTAL_TIMEOUT
   #define CONFIG_PORTAL_TIMEOUT 180
+#endif
+#ifndef WIFI_FAIL_FAST_SEC
+  #define WIFI_FAIL_FAST_SEC 15
+#endif
+#ifndef WIFI_ENABLE_CAPTIVE_PORTAL
+  #define WIFI_ENABLE_CAPTIVE_PORTAL 0
 #endif
 
 // --- OTA ---
@@ -24,10 +33,16 @@
 #ifndef OTA_PASSWORD
   #define OTA_PASSWORD "birdnest_ota"
 #endif
+#ifndef OTA_STALL_TIMEOUT_SEC
+  #define OTA_STALL_TIMEOUT_SEC 180
+#endif
 
 // --- Hardware ---
 #ifndef TEMP_PIN
   #define TEMP_PIN 13
+#endif
+#ifndef TEMP_SAMPLE_COUNT
+  #define TEMP_SAMPLE_COUNT 2
 #endif
 
 // --- Telegram ---

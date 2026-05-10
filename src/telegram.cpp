@@ -22,9 +22,32 @@ static uint8_t       s_debugVerbosity = 2; // 0=minimal, 1=normal, 2=verbose
 static bool          s_camMirror     = true;
 static bool          s_camFlip       = false;
 static int32_t       s_lastMessageId = 0;  // Last processed Telegram update_id
+static bool          s_lastMsgDirty  = false;
+static unsigned long s_lastMsgPersistMs = 0;
 typedef void (*PhotoCallback)(const char*);
 static PhotoCallback s_photoCb       = nullptr;
 static SleepCallback s_sleepCb       = nullptr;
+
+static const uint16_t STARTUP_MSG_PROCESS_LIMIT = 20;
+static const unsigned long STARTUP_MSG_TIME_LIMIT_MS = 10000UL;
+static const unsigned long LAST_MSG_PERSIST_INTERVAL_MS = 30000UL;
+
+static void persistLastMessageId(bool force = false) {
+    if (!s_lastMsgDirty) return;
+
+    unsigned long now = millis();
+    if (!force && (now - s_lastMsgPersistMs) < LAST_MSG_PERSIST_INTERVAL_MS) {
+        return;
+    }
+
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, /*readOnly=*/false);
+    prefs.putLong("lastMsgId", s_lastMessageId);
+    prefs.end();
+
+    s_lastMsgDirty = false;
+    s_lastMsgPersistMs = now;
+}
 
 static void loadRuntimeConfig() {
     Preferences prefs;
@@ -49,6 +72,8 @@ static void saveRuntimeConfig() {
     prefs.putBool("camFlip", s_camFlip);
     prefs.putLong("lastMsgId", s_lastMessageId);
     prefs.end();
+    s_lastMsgDirty = false;
+    s_lastMsgPersistMs = millis();
 }
 
 // ============================================================
@@ -80,7 +105,8 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     // Update the last processed message ID so we don't replay on restart
     if (msg.update_id > s_lastMessageId) {
         s_lastMessageId = msg.update_id;
-        saveRuntimeConfig();
+        s_lastMsgDirty = true;
+        persistLastMessageId(false);
     }
 
     bool fromMain  = chatIdMatches(chatId, getChatId());
@@ -108,6 +134,14 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Maintenance mode OFF - deep sleep active.");
         telegramSendDebug("Maintenance mode disabled by chat " + chatId);
+
+        // Live /maint_off should return to power-saving mode immediately.
+        // Do not force sleep while replaying queued startup messages.
+        if (allowResetConfig && s_sleepCb && s_sleepSec > 0) {
+            telegramSendDebug("Entering deep sleep now after /maint_off", 1);
+            delay(200);
+            s_sleepCb(s_sleepSec);
+        }
     }
     else if (text == "/photo") {
         telegramSend(chatId.c_str(), "Taking photo...");
@@ -258,14 +292,28 @@ void telegramProcessStartupMessages() {
 
     // Process queued commands from sleep/offline periods, but drop only
     // unsafe destructive commands that should not be replayed on boot.
+    uint16_t processed = 0;
+    unsigned long startMs = millis();
+
     while (msgCount) {
+        if (processed >= STARTUP_MSG_PROCESS_LIMIT || (millis() - startMs) >= STARTUP_MSG_TIME_LIMIT_MS) {
+            telegramSendDebug("Startup queue limit reached, deferring remaining messages", 1);
+            break;
+        }
+
         Serial.println("[TG] processing " + String(msgCount) + " queued message(s)");
         telegramSendDebug("Processing " + String(msgCount) + " queued Telegram message(s)", 2);
         for (int i = 0; i < msgCount; i++) {
+            if (processed >= STARTUP_MSG_PROCESS_LIMIT || (millis() - startMs) >= STARTUP_MSG_TIME_LIMIT_MS) {
+                break;
+            }
             handleMessage(s_bot->messages[i], false);
+            ++processed;
         }
+        persistLastMessageId(false);
         msgCount = s_bot->getUpdates(s_bot->last_message_received + 1);
     }
+    persistLastMessageId(true);
     s_lastBotCheck = millis();
 }
 
@@ -280,6 +328,7 @@ void telegramLoop() {
     int numNewMessages = s_bot->getUpdates(s_bot->last_message_received + 1);
     if (numNewMessages > 0) {
         for (int i = 0; i < numNewMessages; i++) handleMessage(s_bot->messages[i]);
+        persistLastMessageId(false);
     }
 }
 
