@@ -10,6 +10,7 @@
 #include "camera.h"
 #include "ota.h"
 #include "temperature.h"
+#include "battery.h"
 #include "sun_times.h"
 
 // ============================================================
@@ -171,6 +172,8 @@ void setup() {
 
     // Temperature sensor – does not depend on WiFi
     tempInit();
+    batteryInit();
+    batteryRefresh();
 
     // WiFi + captive portal (blocking until connected or timeout)
     Serial.println("[WIFI] connecting...");

@@ -14,6 +14,7 @@ static unsigned long s_lastOtaEventMs = 0;
 
 void otaInit() {
     ArduinoOTA.setHostname(OTA_HOSTNAME);
+    ArduinoOTA.setTimeout(OTA_TIMEOUT_MS);
 
     ArduinoOTA.onStart([]() {
         s_otaActive = true;
@@ -55,12 +56,12 @@ void otaInit() {
         Serial.println(msg);
         telegramSendDebug(msg, 0);
 
-        // Retry mechanism for transient errors
-        if (error == OTA_CONNECT_ERROR || error == OTA_RECEIVE_ERROR) {
-            Serial.println("[OTA] Retrying OTA update...");
-            telegramSendDebug("[OTA] Retrying OTA update...", 0);
-            delay(5000); // Wait before retrying
-            ArduinoOTA.begin(); // Restart OTA process
+        if (error == OTA_CONNECT_ERROR) {
+            telegramSendDebug("[OTA] CONNECT_ERROR: check upload IP, same WiFi/LAN, and firewall", 0);
+        } else if (error == OTA_RECEIVE_ERROR) {
+            telegramSendDebug("[OTA] RECEIVE_ERROR: unstable link or timeout during transfer", 0);
+        } else if (error == OTA_END_ERROR) {
+            telegramSendDebug("[OTA] END_ERROR: transfer interrupted or incomplete", 0);
         }
     });
 

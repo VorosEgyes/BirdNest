@@ -16,6 +16,12 @@ static char s_debugChatId[CHAT_ID_LEN] = {0};
 
 static bool s_shouldSave = false;
 
+static bool hasAllTelegramFields() {
+    return s_botToken[0] != '\0' &&
+           s_chatId[0] != '\0' &&
+           s_debugChatId[0] != '\0';
+}
+
 // ============================================================
 // NVS (Preferences) helpers
 // ============================================================
@@ -53,8 +59,12 @@ static void onSaveConfig() {
 bool wifiInit() {
     loadFromNVS();
 
+    // Safety fallback: if Telegram IDs are missing, force portal mode so
+    // credentials can be entered remotely without reflashing.
+    bool missingTelegramFields = !hasAllTelegramFields();
+
     // Remote deployment mode: avoid long-lived captive portal sessions.
-    if (WIFI_ENABLE_CAPTIVE_PORTAL == 0) {
+    if (WIFI_ENABLE_CAPTIVE_PORTAL == 0 && !missingTelegramFields) {
         WiFi.mode(WIFI_STA);
         WiFi.begin(); // Use credentials saved by WiFi stack
 
@@ -76,6 +86,10 @@ bool wifiInit() {
     WiFiManager wm;
     wm.setConfigPortalTimeout(CONFIG_PORTAL_TIMEOUT);
     wm.setSaveConfigCallback(onSaveConfig);
+
+    if (missingTelegramFields) {
+        Serial.println("[WIFI] Telegram credentials missing - opening config portal");
+    }
 
     // Custom fields shown on the captive portal page
     WiFiManagerParameter paramToken(

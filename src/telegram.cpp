@@ -2,6 +2,7 @@
 #include "wifi_manager.h"
 #include "config.h"
 #include "temperature.h"
+#include "battery.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -115,10 +116,14 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
 
     if (text == "/start" || text == "/status") {
         float temp = tempRead();
+        float battV = batteryReadVoltage();
+        int battPct = batteryReadPercent();
         String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
+        String battStr = String(battV, 2) + " V (" + String(battPct) + "%)";
         telegramSend(chatId.c_str(),
             "BirdNest online\nIP: " + WiFi.localIP().toString() +
             "\nTemp: " + tempStr +
+            "\nBattery: " + battStr +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
             "\nFlip: " + (s_camFlip ? "ON" : "OFF"));
@@ -251,10 +256,14 @@ bool telegramSendDebug(const String& message, uint8_t level) {
 bool telegramSendWelcome() {
     int32_t rssi = WiFi.RSSI();
     float temp = tempRead();
+    float battV = batteryReadVoltage();
+    int battPct = batteryReadPercent();
     String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
+    String battStr = String(battV, 2) + " V (" + String(battPct) + "%)";
     String msg = "BirdNest camera online!\n"
                  "IP: " + WiFi.localIP().toString() + "\n"
                  "WiFi RSSI: " + String(rssi) + " dBm\n"
+                 "Battery: " + battStr + "\n"
                  "Temp: " + tempStr + "\n\n"
                  "NVS runtime config:\n"
                  "Sleep: " + String(s_sleepSec / 60) + " min\n"

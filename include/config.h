@@ -36,6 +36,9 @@
 #ifndef OTA_STALL_TIMEOUT_SEC
   #define OTA_STALL_TIMEOUT_SEC 180
 #endif
+#ifndef OTA_TIMEOUT_MS
+  #define OTA_TIMEOUT_MS 10000
+#endif
 
 // --- Hardware ---
 #ifndef TEMP_PIN
@@ -43,6 +46,37 @@
 #endif
 #ifndef TEMP_SAMPLE_COUNT
   #define TEMP_SAMPLE_COUNT 2
+#endif
+
+#ifndef BATTERY_ADC_PIN
+  #define BATTERY_ADC_PIN 12
+#endif
+#ifndef BATTERY_ADC_SAMPLES
+  #define BATTERY_ADC_SAMPLES 8
+#endif
+#ifndef BATTERY_ADC_SETTLE_US
+  #define BATTERY_ADC_SETTLE_US 5000
+#endif
+#ifndef BATTERY_CAL_MULT
+  #define BATTERY_CAL_MULT 1.00f
+#endif
+#ifndef BATTERY_ADC_VREF
+  #define BATTERY_ADC_VREF 3.3f
+#endif
+#ifndef BATTERY_ADC_MAX
+  #define BATTERY_ADC_MAX 4095.0f
+#endif
+#ifndef BATTERY_DIVIDER_RTOP
+  #define BATTERY_DIVIDER_RTOP 2000000.0f
+#endif
+#ifndef BATTERY_DIVIDER_RBOTTOM
+  #define BATTERY_DIVIDER_RBOTTOM 1000000.0f
+#endif
+#ifndef BATTERY_EMPTY_V
+  #define BATTERY_EMPTY_V 3.20f
+#endif
+#ifndef BATTERY_FULL_V
+  #define BATTERY_FULL_V 4.20f
 #endif
 
 // --- Telegram ---
