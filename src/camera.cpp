@@ -95,12 +95,12 @@ bool cameraInit() {
     cfg.grab_mode     = CAMERA_GRAB_LATEST;
 
     if (psramFound()) {
-        cfg.frame_size   = FRAMESIZE_UXGA;
-        cfg.jpeg_quality = 5;  // Faster than 3, still high quality
+        cfg.frame_size   = static_cast<framesize_t>(CAMERA_FRAMESIZE_PSRAM);
+        cfg.jpeg_quality = CAMERA_JPEG_QUALITY_PSRAM;
         cfg.fb_count     = 2;
     } else {
-        cfg.frame_size   = FRAMESIZE_VGA;
-        cfg.jpeg_quality = 12;
+        cfg.frame_size   = static_cast<framesize_t>(CAMERA_FRAMESIZE_NOPSRAM);
+        cfg.jpeg_quality = CAMERA_JPEG_QUALITY_NOPSRAM;
         cfg.fb_count     = 1;
     }
 
@@ -132,10 +132,24 @@ bool cameraInit() {
     s->set_aec2(s, 1);                   // AEC DSP algorithm ON
 
     // Lens / correction
+    // set_lenc: 0 = lens distortion correction OFF (it can darken the corners on some modules)
+    // set_bpc:  1 = black pixel correction ON (repairs dead/dark pixels in software)
+    // set_wpc:  1 = white pixel correction ON (repairs hot/bright pixels in software)
+    // set_raw_gma: 1 = RAW gamma correction ON (gives a more natural tone curve)
     s->set_lenc(s, 0);
     s->set_bpc(s, 1);
     s->set_wpc(s, 1);
     s->set_raw_gma(s, 1);
+
+    // Image quality controls (color, contrast, brightness, sharpness) from build flags, range -2..+2
+    // Saturation: -2 = grayscale-like, 0 = neutral, +2 = vivid colors
+    s->set_saturation(s, CAMERA_SATURATION);
+    // Contrast: -2 = flat/washed out, 0 = neutral, +2 = punchy and more defined
+    s->set_contrast(s, CAMERA_CONTRAST);
+    // Brightness: -2 = darker, 0 = neutral, +2 = brighter (AEC still does the main correction)
+    s->set_brightness(s, CAMERA_BRIGHTNESS);
+    // Sharpness: -2 = softer, 0 = neutral, +2 = stronger edge enhancement for feather/twig detail
+    s->set_sharpness(s, CAMERA_SHARPNESS);
 
     // Orientation
     s->set_special_effect(s, 0);
@@ -147,7 +161,9 @@ bool cameraInit() {
     // Read ambient light and apply exposure registers (from live project)
     s->set_reg(s, 0xff, 0xff, 0x01); // bank sel
     int light = s->get_reg(s, 0x2f, 0xff);
-    const int DAY_THRESHOLD = 140;
+    // CAMERA_DAY_THRESHOLD (build flag, default 140): values below this switch to night mode
+    // Lower it if dark conditions are still treated as daytime; raise it if daytime falls into night mode
+    const int DAY_THRESHOLD = CAMERA_DAY_THRESHOLD;
 
     if (light < DAY_THRESHOLD) {
         // Night mode
@@ -219,17 +235,18 @@ bool cameraSendPhoto(const char* chatId) {
 
      flashOff();
 
-     // Take 4 warm-up frames so AEC/AWB stabilises
+     // Take warm-up frames so AEC/AWB stabilises
+     const int warmupFrames = CAMERA_WARMUP_FRAMES > 0 ? CAMERA_WARMUP_FRAMES : 1;
      unsigned long t_capture_start = millis();
      camera_fb_t* fb = nullptr;
-     for (int i = 0; i < 4; i++) {
+     for (int i = 0; i < warmupFrames; i++) {
          if (fb) esp_camera_fb_return(fb);
          fb = esp_camera_fb_get();
          if (!fb) {
              Serial.println("[CAM] fb_get failed at warmup " + String(i));
-             if (i == 3) return false;
+             if (i == warmupFrames - 1) return false;
          }
-         if (i < 3) {
+         if (i < warmupFrames - 1) {
              // split delay so watchdog stays fed
              for (int d = 0; d < 4; d++) { delay(100); yield(); }
          }
@@ -281,8 +298,8 @@ bool cameraSendPhoto(const char* chatId) {
         "Content-Type: multipart/form-data; boundary=" + boundary + "\r\n"
         "Content-Length: " + String(totalLen) + "\r\n"
         "Connection: close\r\n\r\n";
-    if (!writeAll(client, reinterpret_cast<const uint8_t*>(requestHeaders.c_str()), requestHeaders.length(), 5000) ||
-        !writeAll(client, reinterpret_cast<const uint8_t*>(head.c_str()), head.length(), 5000)) {
+    if (!writeAll(client, reinterpret_cast<const uint8_t*>(requestHeaders.c_str()), requestHeaders.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS) ||
+        !writeAll(client, reinterpret_cast<const uint8_t*>(head.c_str()), head.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
         Serial.println("[CAM] failed to send HTTP headers/body prefix");
         esp_camera_fb_return(fb);
         return false;
@@ -298,12 +315,13 @@ bool cameraSendPhoto(const char* chatId) {
     bool writeFailed = false;
     for (size_t n = 0; n < len; n += uploadChunk) {
         size_t chunk = ((n + uploadChunk) < len) ? uploadChunk : (len - n);
-        if (!writeAll(client, buf + n, chunk, 5000)) {
+        if (!writeAll(client, buf + n, chunk, CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
             Serial.println("[CAM] upload write failed at offset " + String(n));
             writeFailed = true;
             break;
         }
         sentBytes += chunk;
+        yield();
         if (sentBytes >= nextProgressAt || sentBytes == len) {
             unsigned long elapsed = millis() - t_send_start;
             unsigned long bps = elapsed > 0 ? static_cast<unsigned long>((sentBytes * 1000ULL) / elapsed) : 0;
@@ -311,7 +329,7 @@ bool cameraSendPhoto(const char* chatId) {
             nextProgressAt += progressStep;
         }
     }
-    if (!writeFailed && !writeAll(client, reinterpret_cast<const uint8_t*>(tail.c_str()), tail.length(), 5000)) {
+    if (!writeFailed && !writeAll(client, reinterpret_cast<const uint8_t*>(tail.c_str()), tail.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
         Serial.println("[CAM] failed to send multipart tail");
         writeFailed = true;
     }
@@ -331,9 +349,11 @@ bool cameraSendPhoto(const char* chatId) {
     String getAll = "";
     String getBody = "";
     bool   state = false;
-    unsigned long startTimer = millis();
-    while ((startTimer + 10000) > millis()) {
-        delay(100);
+    unsigned long lastByteMs = millis();
+    const unsigned long responseTimeoutMs = CAMERA_RESPONSE_TIMEOUT_MS;
+    while ((millis() - lastByteMs) < responseTimeoutMs) {
+        delay(50);
+        yield();
         while (client.available()) {
             char c = client.read();
             if (state) getBody += c;
@@ -343,12 +363,13 @@ bool cameraSendPhoto(const char* chatId) {
             } else if (c != '\r') {
                 getAll += c;
             }
-            startTimer = millis(); // reset timeout on every byte
+            lastByteMs = millis(); // reset idle timer on every byte
+            yield();
         }
-        // Only exit early when we found a definitive result
+        // Exit early on definitive result
         if (getBody.indexOf("\"ok\":true")  >= 0) break;
         if (getBody.indexOf("\"ok\":false") >= 0) break;
-        // Also exit if the server closed the connection
+        // Exit if server closed the connection and nothing left to read
         if (!client.connected() && !client.available()) break;
     }
     bool ok = getBody.indexOf("\"ok\":true") >= 0;

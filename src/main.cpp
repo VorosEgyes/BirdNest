@@ -61,6 +61,11 @@ static String formatNextWakeTime(uint32_t seconds) {
 }
 
 static void enterDeepSleepSeconds(uint32_t seconds) {
+    // Never enter deep sleep while an OTA transfer is in progress.
+    if (otaIsActive()) {
+        Serial.println("[PWR] deep sleep suppressed – OTA active");
+        return;
+    }
     String nextWake = syncTimeIfNeeded() ? formatNextWakeTime(seconds) : "unknown";
     String sleepMsg = "Going to deep sleep. Next wake-up: " + nextWake;
 
@@ -84,12 +89,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
     if (!ok && retryOnce) {
         Serial.println("[PHOTO] first send failed, retrying once...");
         telegramSendDebug("Photo send failed, retrying once");
-        delay(1000);
-        WiFi.reconnect();
-        unsigned long start = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - start < 5000) {
-            delay(100);
-        }
+        delay(500);
         ok = cameraSendPhoto(chatId);
     }
 
@@ -169,22 +169,34 @@ static void nightSleepIfNeeded() {
 void setup() {
     Serial.begin(115200);
     Serial.println("\n\n=== BirdNest boot ===");
+    // Arduino framework: watchdog is fed by yield()/delay() in loop and long operations
 
     // Temperature sensor – does not depend on WiFi
     tempInit();
     batteryInit();
     batteryRefresh();
+    const float batteryVoltage = batteryReadVoltage();
 
     // WiFi + captive portal (blocking until connected or timeout)
     Serial.println("[WIFI] connecting...");
     if (!wifiInit()) {
         Serial.println("[WIFI] FAILED – sleeping before retry");
         delay(500);
-        enterDeepSleepSeconds(WIFI_RETRY_BACKOFF_SEC);
+        uint32_t retrySleepSec = otaRecoveryIsArmed()
+            ? otaGetRecoverySleepSeconds(batteryVoltage)
+            : WIFI_RETRY_BACKOFF_SEC;
+        enterDeepSleepSeconds(retrySleepSec);
     }
     WiFi.setSleep(false);
     Serial.println("[WIFI] connected: " + WiFi.localIP().toString());
     otaInit();
+
+    // Give PlatformIO time to initiate an OTA connection before we do any
+    // heavy/blocking work (Telegram HTTPS, photo capture, deep sleep).
+    // Without this window, loop() may never run if sleepSec > 0.
+    if (!otaStartupWindow(batteryVoltage)) {
+        enterDeepSleepSeconds(otaGetRecoverySleepSeconds(batteryVoltage));
+    }
 
     syncTimeIfNeeded();
 
@@ -268,7 +280,7 @@ void setup() {
     // After startup photo and startup queue processing, continue the deep sleep cycle immediately.
     // This applies to both first boot and timer wakeups.
     uint32_t sleepSecNow = telegramGetSleepSec();
-    if (sleepSecNow > 0 && !telegramIsMaintMode()) {
+    if (sleepSecNow > 0 && !telegramIsMaintMode() && !otaIsActive()) {
         enterDeepSleepSeconds(sleepSecNow);
     }
 
@@ -280,6 +292,7 @@ void setup() {
 // ============================================================
 
 void loop() {
+    yield();
     // OTA updates – always first
     otaLoop();
 

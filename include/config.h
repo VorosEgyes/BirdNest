@@ -25,19 +25,46 @@
 #ifndef WIFI_ENABLE_CAPTIVE_PORTAL
   #define WIFI_ENABLE_CAPTIVE_PORTAL 0
 #endif
+#ifndef WIFI_RESCUE_FAIL_COUNT
+  #define WIFI_RESCUE_FAIL_COUNT 12
+#endif
+#ifndef WIFI_RESCUE_PORTAL_INTERVAL_FAILS
+  #define WIFI_RESCUE_PORTAL_INTERVAL_FAILS 24
+#endif
+#ifndef WIFI_RESCUE_PORTAL_TIMEOUT
+  #define WIFI_RESCUE_PORTAL_TIMEOUT 180
+#endif
 
 // --- OTA ---
 #ifndef OTA_HOSTNAME
   #define OTA_HOSTNAME "BirdNestCam"
 #endif
 #ifndef OTA_PASSWORD
-  #define OTA_PASSWORD "birdnest_ota"
+#define OTA_PASSWORD ""
 #endif
 #ifndef OTA_STALL_TIMEOUT_SEC
   #define OTA_STALL_TIMEOUT_SEC 180
 #endif
 #ifndef OTA_TIMEOUT_MS
   #define OTA_TIMEOUT_MS 10000
+#endif
+#ifndef OTA_STARTUP_WINDOW_SEC
+  #define OTA_STARTUP_WINDOW_SEC 8
+#endif
+#ifndef OTA_RECOVERY_WINDOW_SEC
+  #define OTA_RECOVERY_WINDOW_SEC 120
+#endif
+#ifndef OTA_RECOVERY_SLEEP_SEC
+  #define OTA_RECOVERY_SLEEP_SEC 900
+#endif
+#ifndef OTA_RECOVERY_LOW_BATTERY_SLEEP_SEC
+  #define OTA_RECOVERY_LOW_BATTERY_SLEEP_SEC 3600
+#endif
+#ifndef OTA_RECOVERY_CYCLES
+  #define OTA_RECOVERY_CYCLES 16
+#endif
+#ifndef OTA_RECOVERY_MIN_BATTERY_V
+  #define OTA_RECOVERY_MIN_BATTERY_V 3.70f
 #endif
 
 // --- Hardware ---
@@ -46,6 +73,47 @@
 #endif
 #ifndef TEMP_SAMPLE_COUNT
   #define TEMP_SAMPLE_COUNT 2
+#endif
+
+// --- Camera ---
+// FRAMESIZE: 8=VGA(640x480) 9=SVGA(800x600) 10=XGA(1024x768) 12=SXGA 13=UXGA
+#ifndef CAMERA_FRAMESIZE_PSRAM
+  #define CAMERA_FRAMESIZE_PSRAM 9
+#endif
+#ifndef CAMERA_JPEG_QUALITY_PSRAM
+  #define CAMERA_JPEG_QUALITY_PSRAM 12
+#endif
+#ifndef CAMERA_FRAMESIZE_NOPSRAM
+  #define CAMERA_FRAMESIZE_NOPSRAM 8
+#endif
+#ifndef CAMERA_JPEG_QUALITY_NOPSRAM
+  #define CAMERA_JPEG_QUALITY_NOPSRAM 12
+#endif
+#ifndef CAMERA_WARMUP_FRAMES
+  #define CAMERA_WARMUP_FRAMES 2
+#endif
+#ifndef CAMERA_UPLOAD_CHUNK_TIMEOUT_MS
+  #define CAMERA_UPLOAD_CHUNK_TIMEOUT_MS 8000
+#endif
+#ifndef CAMERA_RESPONSE_TIMEOUT_MS
+  #define CAMERA_RESPONSE_TIMEOUT_MS 15000
+#endif
+// Image quality adjustments (range -2 to +2; 0 = sensor default)
+#ifndef CAMERA_SATURATION
+  #define CAMERA_SATURATION 1
+#endif
+#ifndef CAMERA_CONTRAST
+  #define CAMERA_CONTRAST 1
+#endif
+#ifndef CAMERA_BRIGHTNESS
+  #define CAMERA_BRIGHTNESS 0
+#endif
+#ifndef CAMERA_SHARPNESS
+  #define CAMERA_SHARPNESS 1
+#endif
+// Ambient light register threshold separating night/day mode (0-255)
+#ifndef CAMERA_DAY_THRESHOLD
+  #define CAMERA_DAY_THRESHOLD 140
 #endif
 
 #ifndef BATTERY_ADC_PIN

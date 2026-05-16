@@ -4,6 +4,7 @@
 
 #include <ArduinoOTA.h>
 #include <Arduino.h>
+#include <Preferences.h>
 
 // ============================================================
 // OTA – password-protected over-the-air firmware update
@@ -11,14 +12,87 @@
 
 static volatile bool s_otaActive = false;
 static unsigned long s_lastOtaEventMs = 0;
+static bool s_lastTransferSuccessful = false;
+static bool s_recoveryArmed = false;
+static uint16_t s_recoveryCyclesRemaining = 0;
+static bool s_recoveryStateLoaded = false;
+
+static void loadRecoveryState() {
+    if (s_recoveryStateLoaded) return;
+
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, /*readOnly=*/true);
+    s_recoveryArmed = prefs.getBool("otaArmed", false);
+    s_recoveryCyclesRemaining = prefs.getUShort("otaCycles", 0);
+    prefs.end();
+    s_recoveryStateLoaded = true;
+}
+
+static void saveRecoveryState() {
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, /*readOnly=*/false);
+    prefs.putBool("otaArmed", s_recoveryArmed);
+    prefs.putUShort("otaCycles", s_recoveryCyclesRemaining);
+    prefs.end();
+}
+
+static bool otaHandleWithWatchdog() {
+    ArduinoOTA.handle();
+
+    if (!s_otaActive) return true;
+
+    const unsigned long stallTimeoutMs = static_cast<unsigned long>(OTA_STALL_TIMEOUT_SEC) * 1000UL;
+    if (s_lastOtaEventMs != 0 && (millis() - s_lastOtaEventMs) <= stallTimeoutMs) {
+        return true;
+    }
+
+    s_otaActive = false;
+    s_lastOtaEventMs = 0;
+    telegramSendDebug("[OTA] transfer stalled, restarting device", 0);
+    Serial.println("[OTA] transfer stalled, restarting device");
+    delay(100);
+    ESP.restart();
+    return false;
+}
+
+void otaArmRecovery() {
+    loadRecoveryState();
+    s_recoveryArmed = true;
+    s_recoveryCyclesRemaining = OTA_RECOVERY_CYCLES;
+    saveRecoveryState();
+}
+
+void otaClearRecovery() {
+    loadRecoveryState();
+    s_recoveryArmed = false;
+    s_recoveryCyclesRemaining = 0;
+    saveRecoveryState();
+}
+
+bool otaRecoveryIsArmed() {
+    loadRecoveryState();
+    return s_recoveryArmed;
+}
+
+unsigned long otaGetRecoverySleepSeconds(float batteryVoltage) {
+    loadRecoveryState();
+    if (batteryVoltage > 0.0f && batteryVoltage < OTA_RECOVERY_MIN_BATTERY_V) {
+        return OTA_RECOVERY_LOW_BATTERY_SLEEP_SEC;
+    }
+    return OTA_RECOVERY_SLEEP_SEC;
+}
 
 void otaInit() {
+    loadRecoveryState();
+
     ArduinoOTA.setHostname(OTA_HOSTNAME);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.setTimeout(OTA_TIMEOUT_MS);
 
     ArduinoOTA.onStart([]() {
         s_otaActive = true;
         s_lastOtaEventMs = millis();
+        s_lastTransferSuccessful = false;
         Serial.println("[OTA] start");
         telegramSendDebug("OTA update started", 0);
     });
@@ -26,6 +100,8 @@ void otaInit() {
     ArduinoOTA.onEnd([]() {
         s_otaActive = false;
         s_lastOtaEventMs = 0;
+        s_lastTransferSuccessful = true;
+        otaClearRecovery();
         Serial.println("[OTA] finished");
         telegramSendDebug("OTA update finished, rebooting...", 0);
     });
@@ -66,23 +142,67 @@ void otaInit() {
     });
 
     ArduinoOTA.begin();
+}
 
+bool otaStartupWindow(float batteryVoltage) {
+    const bool batteryTooLowForRecovery =
+        batteryVoltage > 0.0f && batteryVoltage < OTA_RECOVERY_MIN_BATTERY_V;
+
+    if (s_recoveryArmed && s_recoveryCyclesRemaining == 0) {
+        telegramSendDebug("OTA recovery attempts exhausted, clearing recovery latch", 0);
+        otaClearRecovery();
+    }
+
+    const bool extendedRecovery =
+        s_recoveryArmed && !batteryTooLowForRecovery && s_recoveryCyclesRemaining > 0;
+    const uint32_t windowSec = extendedRecovery ? OTA_RECOVERY_WINDOW_SEC : OTA_STARTUP_WINDOW_SEC;
+    const unsigned long windowMs = static_cast<unsigned long>(windowSec) * 1000UL;
+    unsigned long windowStart = millis();
+
+    if (extendedRecovery) {
+        telegramSendDebug("OTA recovery window open " + String(windowSec) + "s, attempts left after this: " +
+                              String(s_recoveryCyclesRemaining > 0 ? s_recoveryCyclesRemaining - 1 : 0), 0);
+    } else if (s_recoveryArmed && batteryTooLowForRecovery) {
+        telegramSendDebug("OTA recovery deferred, battery too low (" + String(batteryVoltage, 2) +
+                              " V < " + String(OTA_RECOVERY_MIN_BATTERY_V, 2) + " V)", 0);
+    } else {
+        telegramSendDebug("OTA window open " + String(windowSec) + "s - start upload now", 0);
+    }
+
+    while ((millis() - windowStart) < windowMs) {
+        if (!otaHandleWithWatchdog()) return false;
+        if (s_otaActive) {
+            telegramSendDebug("OTA transfer started", 0);
+            while (s_otaActive) {
+                if (!otaHandleWithWatchdog()) return false;
+                delay(2);
+            }
+
+            if (s_lastTransferSuccessful) {
+                return true;
+            }
+        }
+        delay(10);
+    }
+
+    if (extendedRecovery && s_recoveryCyclesRemaining > 0) {
+        --s_recoveryCyclesRemaining;
+        saveRecoveryState();
+        telegramSendDebug("OTA recovery window closed, going back to sleep for retry", 0);
+        return false;
+    }
+
+    if (s_recoveryArmed && batteryTooLowForRecovery) {
+        telegramSendDebug("OTA recovery remains armed but will sleep to protect the battery", 0);
+        return false;
+    }
+
+    telegramSendDebug("OTA window closed, continuing boot", 0);
+    return true;
 }
 
 void otaLoop() {
-    ArduinoOTA.handle();
-
-    if (!s_otaActive) return;
-
-    const unsigned long stallTimeoutMs = static_cast<unsigned long>(OTA_STALL_TIMEOUT_SEC) * 1000UL;
-    if (s_lastOtaEventMs == 0 || (millis() - s_lastOtaEventMs) <= stallTimeoutMs) return;
-
-    s_otaActive = false;
-    s_lastOtaEventMs = 0;
-    telegramSendDebug("[OTA] transfer stalled, restarting device", 0);
-    Serial.println("[OTA] transfer stalled, restarting device");
-    delay(100);
-    ESP.restart();
+    otaHandleWithWatchdog();
 }
 
 bool otaIsActive() {

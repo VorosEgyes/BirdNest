@@ -6,6 +6,20 @@
 #include <Preferences.h>
 #include <Arduino.h>
 
+#ifndef WIFI_RESCUE_FAIL_COUNT
+    #define WIFI_RESCUE_FAIL_COUNT 12
+#endif
+#ifndef WIFI_RESCUE_PORTAL_INTERVAL_FAILS
+    #define WIFI_RESCUE_PORTAL_INTERVAL_FAILS 24
+#endif
+#ifndef WIFI_RESCUE_PORTAL_TIMEOUT
+    #define WIFI_RESCUE_PORTAL_TIMEOUT 180
+#endif
+
+static constexpr uint16_t kWifiRescueFailCount = WIFI_RESCUE_FAIL_COUNT;
+static constexpr uint16_t kWifiRescuePortalIntervalFails = WIFI_RESCUE_PORTAL_INTERVAL_FAILS;
+static constexpr int kWifiRescuePortalTimeout = WIFI_RESCUE_PORTAL_TIMEOUT;
+
 // ============================================================
 // Internal state – static, only visible in this translation unit
 // ============================================================
@@ -15,6 +29,41 @@ static char s_chatId[CHAT_ID_LEN]      = {0};
 static char s_debugChatId[CHAT_ID_LEN] = {0};
 
 static bool s_shouldSave = false;
+
+static uint16_t loadWiFiFailCount() {
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, /*readOnly=*/true);
+    uint16_t failCount = prefs.getUShort("wifiFail", 0);
+    prefs.end();
+    return failCount;
+}
+
+static void saveWiFiFailCount(uint16_t failCount) {
+    Preferences prefs;
+    prefs.begin(NVS_NAMESPACE, /*readOnly=*/false);
+    prefs.putUShort("wifiFail", failCount);
+    prefs.end();
+}
+
+static void recordWiFiConnectSuccess() {
+    saveWiFiFailCount(0);
+}
+
+static uint16_t recordWiFiConnectFailure() {
+    uint16_t failCount = loadWiFiFailCount();
+    if (failCount < 65535) ++failCount;
+    saveWiFiFailCount(failCount);
+    return failCount;
+}
+
+static bool shouldOpenRescuePortal(bool missingTelegramFields, uint16_t failCount) {
+    if (missingTelegramFields) return true;
+    if (WIFI_ENABLE_CAPTIVE_PORTAL != 0) return true;
+    if (failCount < kWifiRescueFailCount) return false;
+    if (kWifiRescuePortalIntervalFails == 0) return true;
+
+    return ((failCount - kWifiRescueFailCount) % kWifiRescuePortalIntervalFails) == 0;
+}
 
 static bool hasAllTelegramFields() {
     return s_botToken[0] != '\0' &&
@@ -58,6 +107,8 @@ static void onSaveConfig() {
 
 bool wifiInit() {
     loadFromNVS();
+    uint16_t failCount = loadWiFiFailCount();
+    bool failureRecordedThisBoot = false;
 
     // Safety fallback: if Telegram IDs are missing, force portal mode so
     // credentials can be entered remotely without reflashing.
@@ -75,20 +126,32 @@ bool wifiInit() {
         }
 
         if (WiFi.status() != WL_CONNECTED) {
-            return false;
-        }
+            failCount = recordWiFiConnectFailure();
+            failureRecordedThisBoot = true;
+            if (!shouldOpenRescuePortal(missingTelegramFields, failCount)) {
+                return false;
+            }
 
-        // OTA is sensitive to modem sleep on ESP32-CAM. Keep the radio fully awake.
-        WiFi.setSleep(false);
-        return true;
+            Serial.println("[WIFI] repeated STA failures - opening rescue portal");
+        } else {
+            // OTA is sensitive to modem sleep on ESP32-CAM. Keep the radio fully awake.
+            WiFi.setSleep(false);
+            recordWiFiConnectSuccess();
+            return true;
+        }
     }
 
     WiFiManager wm;
-    wm.setConfigPortalTimeout(CONFIG_PORTAL_TIMEOUT);
+    const int portalTimeout = shouldOpenRescuePortal(missingTelegramFields, failCount)
+        ? kWifiRescuePortalTimeout
+        : CONFIG_PORTAL_TIMEOUT;
+    wm.setConfigPortalTimeout(portalTimeout);
     wm.setSaveConfigCallback(onSaveConfig);
 
     if (missingTelegramFields) {
         Serial.println("[WIFI] Telegram credentials missing - opening config portal");
+    } else if (failCount >= kWifiRescueFailCount) {
+        Serial.println("[WIFI] rescue portal window open after " + String(failCount) + " failed WiFi boots");
     }
 
     // Custom fields shown on the captive portal page
@@ -106,11 +169,15 @@ bool wifiInit() {
     bool connected = wm.autoConnect(AP_NAME, AP_PASSWORD);
 
     if (!connected) {
+        if (!failureRecordedThisBoot) {
+            recordWiFiConnectFailure();
+        }
         return false;
     }
 
     // OTA is sensitive to modem sleep on ESP32-CAM. Keep the radio fully awake.
     WiFi.setSleep(false);
+    recordWiFiConnectSuccess();
 
     // If the portal saved new values, update buffers and persist to NVS
     if (s_shouldSave) {

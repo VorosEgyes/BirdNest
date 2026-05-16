@@ -5510,7 +5510,7 @@
 			(uuid "96241bb6-618e-4c9d-9833-85fbdc73d145")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R6")
 					(unit 1)
@@ -5591,7 +5591,7 @@
 			(uuid "9d8f41fc-6515-437e-b7b8-55c6b9c7c826")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C6")
 					(unit 1)
@@ -5669,7 +5669,7 @@
 			(uuid "7feb3e74-826d-4ab9-a9e9-c5e47a83cf18")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR05")
 					(unit 1)
@@ -5749,7 +5749,7 @@
 			(uuid "b9a53875-00d4-4f8a-b6c9-62681049b331")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "JP2")
 					(unit 1)
@@ -5827,7 +5827,7 @@
 			(uuid "977330ef-9710-4bd7-93ac-39f3389c5558")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR01")
 					(unit 1)
@@ -5911,7 +5911,7 @@
 			(uuid "d9962423-d618-43e1-a0db-798f3f0e4860")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "U1")
 					(unit 1)
@@ -5988,7 +5988,7 @@
 			(uuid "313abf83-645f-40e8-9766-d257c7600f95")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR03")
 					(unit 1)
@@ -6070,7 +6070,7 @@
 			(uuid "8a596e1f-d163-4555-a3dd-5ba5b71f5451")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R3")
 					(unit 1)
@@ -6321,7 +6321,7 @@
 			(uuid "7020db1c-9449-4f76-9c88-8e74c2f058ba")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "BT1")
 					(unit 1)
@@ -6548,7 +6548,7 @@
 			(uuid "c2daa56f-1605-43cc-bbde-64a6ed7b9720")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "U6")
 					(unit 1)
@@ -6625,7 +6625,7 @@
 			)
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "H2")
 					(unit 1)
@@ -6707,7 +6707,7 @@
 			(uuid "f789ee33-6a3e-414a-a7f1-a1d6c4df0001")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R1")
 					(unit 1)
@@ -6793,7 +6793,7 @@
 			(uuid "6eb0c8f4-ec51-40b7-a342-c0d53824b995")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "Q1")
 					(unit 1)
@@ -6876,7 +6876,7 @@
 			(uuid "8eb04c67-8333-4632-970c-76d3ccbb5726")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "J2")
 					(unit 1)
@@ -6953,7 +6953,7 @@
 			(uuid "f5eb0091-ae32-44ab-bdee-ec6ede57f3d5")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR09")
 					(unit 1)
@@ -7030,7 +7030,7 @@
 			(uuid "3eabf826-c135-493b-8e1d-425ef7b1d1d6")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR013")
 					(unit 1)
@@ -7109,7 +7109,7 @@
 			(uuid "21412080-3da5-4b45-8575-c08287eda103")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "TP2")
 					(unit 1)
@@ -7187,7 +7187,7 @@
 			(uuid "45cdc298-8dd3-466f-8f7b-1d10538476ea")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#FLG04")
 					(unit 1)
@@ -7272,7 +7272,7 @@
 			(uuid "2a714169-dad5-439a-b1b7-09d9613c2478")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "JP3")
 					(unit 1)
@@ -7352,7 +7352,7 @@
 			(uuid "446ddeb9-5e56-4a65-b951-eca3b493ad94")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "JP1")
 					(unit 1)
@@ -7432,7 +7432,7 @@
 			(uuid "f414020c-936a-48aa-bbd2-be0c50b59bb4")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "NT2")
 					(unit 1)
@@ -7510,7 +7510,7 @@
 			(uuid "d2fdd8fb-b089-45f3-a887-3d34ab04fd8c")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#FLG05")
 					(unit 1)
@@ -7589,7 +7589,7 @@
 			(uuid "f9793319-3617-45c7-b3bf-46b80c20569f")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R10")
 					(unit 1)
@@ -7808,7 +7808,7 @@
 			(uuid "48060ed2-ca14-458f-843a-8db6e196ec03")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "U4")
 					(unit 1)
@@ -7886,7 +7886,7 @@
 			(uuid "fbb7edb3-be81-43c4-9dbf-73606de2a7bb")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR06")
 					(unit 1)
@@ -7966,7 +7966,7 @@
 			(uuid "c59109fc-6137-43af-9d27-29e778754185")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "J1")
 					(unit 1)
@@ -8044,7 +8044,7 @@
 			(uuid "5e5a6505-208e-43b6-abc2-f948524dbcbe")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR08")
 					(unit 1)
@@ -8121,7 +8121,7 @@
 			)
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "H1")
 					(unit 1)
@@ -8199,7 +8199,7 @@
 			(uuid "ea9343f6-4bc0-4d60-aa73-0b20fde71de0")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#FLG01")
 					(unit 1)
@@ -8281,7 +8281,7 @@
 			(uuid "ba3c8b86-ccad-47be-b0fa-df3b35fa18e0")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R14")
 					(unit 1)
@@ -8358,7 +8358,7 @@
 			(uuid "5cec3033-d2cc-46bd-bf7f-6174b39f1982")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR018")
 					(unit 1)
@@ -8397,7 +8397,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"
+		(property "Footprint" "Capacitor_THT:CP_Radial_D6.3mm_P2.50mm"
 			(at 157.48 96.8248 0)
 			(hide yes)
 			(show_name no)
@@ -8437,7 +8437,7 @@
 			(uuid "37249a72-f5bd-4a2f-adc5-69878db676ab")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C2")
 					(unit 1)
@@ -8514,7 +8514,7 @@
 			)
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "H4")
 					(unit 1)
@@ -8592,7 +8592,7 @@
 			(uuid "d5472e6e-9b51-48d4-84bf-ff0cfee054c6")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR07")
 					(unit 1)
@@ -8670,7 +8670,7 @@
 			(uuid "53cfd714-809c-4d9a-bc83-527bc8652a4d")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR017")
 					(unit 1)
@@ -8756,7 +8756,7 @@
 			(uuid "bb259f6d-ff1f-4956-8351-379e873e478f")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "Q5")
 					(unit 1)
@@ -8835,7 +8835,7 @@
 			(uuid "0ad04b82-c7ee-4b49-b9d8-50eded66be4c")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C1")
 					(unit 1)
@@ -8912,7 +8912,7 @@
 			(uuid "7a640d79-239d-48e5-8851-ea4bf7808eec")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR02")
 					(unit 1)
@@ -8992,7 +8992,7 @@
 			(uuid "238aabb4-142b-4ad4-abb3-b3ae0fe35b47")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "D2")
 					(unit 1)
@@ -9071,7 +9071,7 @@
 			(uuid "2d31b1ed-ef17-4b57-b1c1-205dc2023858")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "TP1")
 					(unit 1)
@@ -9163,7 +9163,7 @@
 			(uuid "f78168dd-cc38-4f60-bba7-6ae6c76aa90b")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "U5")
 					(unit 1)
@@ -9203,7 +9203,7 @@
 				)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
+		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm"
 			(at 209.55 89.2048 0)
 			(hide yes)
 			(show_name no)
@@ -9243,7 +9243,7 @@
 			(uuid "cf00bbe1-a198-4837-9afc-5510332d1f86")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C3")
 					(unit 1)
@@ -9325,7 +9325,7 @@
 			(uuid "8c0dd0ff-b598-47c6-97cd-5690b0a5ec53")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R4")
 					(unit 1)
@@ -9404,7 +9404,7 @@
 			(uuid "3391c683-099b-45e9-884f-98b19a8891a8")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R2")
 					(unit 1)
@@ -9482,7 +9482,7 @@
 			(uuid "b9c153aa-7968-445c-9f6e-2f55a0469b56")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR04")
 					(unit 1)
@@ -9559,7 +9559,7 @@
 			)
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "H3")
 					(unit 1)
@@ -9638,7 +9638,7 @@
 			(uuid "d5ca0554-5e65-4bdb-a74c-95bfb03c11d3")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "TP3")
 					(unit 1)
@@ -9679,7 +9679,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
+		(property "Footprint" "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P2.50mm"
 			(at 174.9552 36.83 0)
 			(hide yes)
 			(show_name no)
@@ -9719,7 +9719,7 @@
 			(uuid "7a6e4c16-c385-4c5f-8fa0-579cdeb9c653")
 		)
 		(instances
-			(project "ESP32CAM_odu"
+			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C5")
 					(unit 1)
