@@ -152,6 +152,17 @@
   #define PHOTO_INTERVAL_SEC 300
 #endif
 
+// --- MQTT ---
+#ifndef MQTT_DEFAULT_PORT
+  #define MQTT_DEFAULT_PORT 1883
+#endif
+#ifndef MQTT_RECONNECT_INTERVAL_MS
+  #define MQTT_RECONNECT_INTERVAL_MS 10000
+#endif
+#ifndef MQTT_STATUS_INTERVAL_SEC
+  #define MQTT_STATUS_INTERVAL_SEC 300
+#endif
+
 // --- Power saving ---
 #ifndef DEEP_SLEEP_SEC
   #define DEEP_SLEEP_SEC 0

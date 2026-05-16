@@ -33,7 +33,7 @@
 
 - 5-second polling interval
 - Update ID persistence every 30 seconds
-- Command table: `/photo`, `/sleep N`, `/maint_on`, `/maint_off`, `/battcal`, `/battcalset`, `/status`
+- Command table: `/photo`, `/sleepXX`, `/maint_on`, `/maint_off`, `/status`, `/reboot`, `/debug0|1|2`, `/mirror0|1`, `/flip0|1`, `/battcal`, `/battcalset`, `/battcalclear`, `/mqtt`, `/mqttset`, `/mqtttopic`, `/mqtttopic_reset`, `/mqttoff`
 - Callback execution for each command
 
 ---
@@ -80,6 +80,61 @@
 - Stall timeout (180 sec) if no response
 - Recovery cycles (16) with battery thresholds
 
+### MQTT
+- Runtime MQTT client with automatic reconnect
+- JSON status publish to a configurable topic (channel)
+- Config stored in NVS and editable from Telegram
+- Supports auth and no-auth brokers
+- Periodic publish (`MQTT_STATUS_INTERVAL_SEC`) and immediate publish on boot/config change
+
+---
+
+## MQTT Setup and Usage
+
+### Default Topic (Channel)
+
+If no custom topic is set, status is published to:
+
+- `birdnest/CAMERA_LABEL/status`
+
+Where `CAMERA_LABEL` comes from `platformio.ini` build flags.
+
+### Telegram Commands for MQTT
+
+- `/mqtt` - show current MQTT config and active channel
+- `/mqttset <ip-or-host> <port> <user|-> <pass|->` - set broker and auth in one message
+- `/mqtttopic <topic>` - set custom publish channel/topic
+- `/mqtttopic_reset` - reset topic to default (`birdnest/CAMERA_LABEL/status`)
+- `/mqttoff` - disable MQTT and clear broker credentials
+
+### One-message setup examples
+
+- Auth enabled:
+	- `/mqttset 192.168.1.100 1883 mqtt_user mqtt_pass`
+- No auth:
+	- `/mqttset 192.168.1.100 1883 - -`
+
+### Channel/topic examples
+
+- Set custom channel:
+	- `/mqtttopic birdnest/BirdNestCam1/status`
+- Reset to default channel:
+	- `/mqtttopic_reset`
+
+### Published payload (status)
+
+Status message is JSON and includes:
+
+- `device`
+- `reason` (`boot`, `periodic`, `manual`, `config_updated`, ...)
+- `ip`
+- `rssi`
+- `uptime_s`
+- `temp_c`
+- `battery_v`
+- `battery_pct`
+- `maint`
+
 ---
 
 ## NVS Storage Structure
@@ -101,6 +156,11 @@
 | `otaArmed` | int | OTA armed flag |
 | `otaCycles` | int | OTA recovery cycles |
 | `wifiFail` | int | WiFi connection failure counter |
+| `mqttHost` | string | MQTT broker host/IP |
+| `mqttPort` | int | MQTT broker port |
+| `mqttUser` | string | MQTT username (optional) |
+| `mqttPass` | string | MQTT password (optional) |
+| `mqttTopic` | string | Custom MQTT publish topic (optional) |
 
 ---
 

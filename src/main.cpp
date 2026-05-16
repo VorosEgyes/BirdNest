@@ -12,6 +12,7 @@
 #include "temperature.h"
 #include "battery.h"
 #include "sun_times.h"
+#include "mqtt_client.h"
 
 // ============================================================
 // Global timers
@@ -222,6 +223,8 @@ void setup() {
     // Process queued commands first (e.g. /maint_on while device was sleeping)
     // so runtime flags are up to date before any sleep decision.
     telegramProcessStartupMessages();
+    mqttInit();
+    mqttPublishNow("boot");
 
     // Night-time check: if after sunset or before sunrise, sleep until sunrise (max 12 h)
     nightSleepIfNeeded();
@@ -304,6 +307,7 @@ void loop() {
 
     // Handle incoming Telegram commands
     telegramLoop();
+    mqttLoop();
 
     // Periodic photo + deep sleep cycle
     unsigned long now = millis();

@@ -4,6 +4,7 @@
 #include "temperature.h"
 #include "battery.h"
 #include "ota.h"
+#include "mqtt_client.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -130,6 +131,54 @@ static bool parseBatteryCalibrationArgs(const String& text, float& realV1, float
     measuredV1 = parsed[1];
     realV2 = parsed[2];
     measuredV2 = parsed[3];
+    return true;
+}
+
+static bool parseMqttSetArgs(const String& text, String& host, uint16_t& port, String& user, String& pass) {
+    const int firstSpace = text.indexOf(' ');
+    if (firstSpace < 0) return false;
+
+    String args = text.substring(firstSpace + 1);
+    args.trim();
+
+    String parts[4];
+    int count = 0;
+    int start = 0;
+
+    while (start < args.length() && count < 4) {
+        while (start < args.length() && args.charAt(start) == ' ') ++start;
+        if (start >= args.length()) break;
+
+        int end = args.indexOf(' ', start);
+        if (end < 0) end = args.length();
+
+        parts[count++] = args.substring(start, end);
+        start = end + 1;
+    }
+
+    if (count != 4) return false;
+
+    host = parts[0];
+    host.trim();
+    if (host.length() == 0) return false;
+
+    String portStr = parts[1];
+    portStr.trim();
+    for (size_t i = 0; i < portStr.length(); ++i) {
+        if (!isdigit(static_cast<unsigned char>(portStr.charAt(i)))) return false;
+    }
+    unsigned long parsedPort = portStr.toInt();
+    if (parsedPort == 0 || parsedPort > 65535UL) return false;
+    port = static_cast<uint16_t>(parsedPort);
+
+    user = parts[2];
+    pass = parts[3];
+    user.trim();
+    pass.trim();
+
+    if (user == "-") user = "";
+    if (pass == "-") pass = "";
+
     return true;
 }
 
@@ -329,6 +378,91 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         delay(500);
         ESP.restart();
     }
+    else if (text == "/mqtt") {
+        String host;
+        String user;
+        String pass;
+        uint16_t port = MQTT_DEFAULT_PORT;
+        mqttGetConfig(host, port, user, pass);
+        const String topic = mqttGetStatusTopic();
+
+        if (!mqttHasConfig()) {
+            telegramSend(chatId.c_str(),
+                "MQTT is OFF.\n"
+                "Set in one message:\n"
+                "/mqttset 192.168.1.100 1883 mqtt_user mqtt_pass\n"
+                "No auth: /mqttset 192.168.1.100 1883 - -\n"
+                "Channel: /mqtttopic birdnest/BirdNestCam1/status");
+            return;
+        }
+
+        String authState = (user.length() > 0) ? ("ON (user=" + user + ")") : "OFF";
+        String command = mqttBuildSetupCommand(host, port, user, pass.length() > 0 ? pass : String("-"));
+        telegramSend(chatId.c_str(),
+            "MQTT config:\n"
+            "Host: " + host + "\n"
+            "Port: " + String(port) + "\n"
+                "Channel: " + topic + "\n"
+            "Auth: " + authState + "\n\n"
+            "Reusable setup command (single message):\n" + command +
+                "\n\nCommands:\n/mqttset <ip> <port> <user|-> <pass|->\n/mqtttopic <topic>\n/mqtttopic_reset\n/mqttoff");
+    }
+    else if (text.startsWith("/mqttset ")) {
+        String host;
+        String user;
+        String pass;
+        uint16_t port = MQTT_DEFAULT_PORT;
+        if (!parseMqttSetArgs(text, host, port, user, pass)) {
+            telegramSend(chatId.c_str(),
+                "Usage:\n"
+                "/mqttset <ip-or-host> <port> <user|-> <pass|->\n"
+                "Example:\n"
+                "/mqttset 192.168.1.100 1883 mqtt_user mqtt_pass\n"
+                "No auth:\n"
+                "/mqttset 192.168.1.100 1883 - -");
+            return;
+        }
+
+        if (!mqttSetConfig(host, port, user, pass)) {
+            telegramSend(chatId.c_str(), "MQTT save failed (invalid host/user/pass length).");
+            return;
+        }
+
+        mqttPublishNow("config_updated");
+        String reusable = mqttBuildSetupCommand(host, port, user, pass);
+        telegramSend(chatId.c_str(),
+            "MQTT saved and activated.\n"
+            "Host: " + host + "\nPort: " + String(port) +
+            "\nAuth: " + String(user.length() > 0 ? "ON" : "OFF") +
+            "\n\nReusable one-message command:\n" + reusable);
+        telegramSendDebug("MQTT config updated by chat " + chatId, 0);
+    }
+    else if (text == "/mqttoff") {
+        mqttClearConfig();
+        telegramSend(chatId.c_str(), "MQTT disabled and credentials cleared.");
+        telegramSendDebug("MQTT disabled by chat " + chatId, 0);
+    }
+    else if (text.startsWith("/mqtttopic ")) {
+        String topic = text.substring(11);
+        topic.trim();
+
+        if (!mqttSetStatusTopic(topic)) {
+            telegramSend(chatId.c_str(),
+                "Invalid topic.\n"
+                "Usage: /mqtttopic <topic>\n"
+                "Example: /mqtttopic birdnest/BirdNestCam1/status\n"
+                "No spaces allowed.");
+            return;
+        }
+
+        telegramSend(chatId.c_str(), "MQTT channel set to: " + mqttGetStatusTopic());
+        telegramSendDebug("MQTT topic updated by chat " + chatId + " to " + mqttGetStatusTopic(), 0);
+    }
+    else if (text == "/mqtttopic_reset") {
+        mqttResetStatusTopic();
+        telegramSend(chatId.c_str(), "MQTT channel reset to default: " + mqttGetStatusTopic());
+        telegramSendDebug("MQTT topic reset by chat " + chatId, 0);
+    }
 }
 
 // ============================================================
@@ -402,6 +536,11 @@ bool telegramSendWelcome() {
                  "/sleepXX – deep sleep interval in minutes (00 = off)\n"
                  "/mirror0|1 – camera mirror OFF/ON\n"
                  "/flip0|1 – camera vertical flip OFF/ON\n"
+                 "/mqtt – show MQTT config and one-message setup command\n"
+                 "/mqttset h p u pw – set MQTT host/port/auth in one message\n"
+                 "/mqtttopic t – set MQTT publish channel/topic\n"
+                 "/mqtttopic_reset – reset MQTT topic to default\n"
+                 "/mqttoff – disable MQTT\n"
                  "/battcal – show battery calibration\n"
                  "/battcalset r1 m1 r2 m2 – set two-point battery calibration\n"
                  "/battcalclear – clear battery calibration\n"
