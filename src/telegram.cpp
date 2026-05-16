@@ -3,12 +3,14 @@
 #include "config.h"
 #include "temperature.h"
 #include "battery.h"
+#include "ota.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
 #include <Arduino.h>
 #include <Preferences.h>
+
 // static objects, not pointers, token set at construct time.
 static WiFiClientSecure s_client;
 static String           s_token;
@@ -95,6 +97,42 @@ static String normalizeCommand(String text) {
     return text;
 }
 
+static bool parseBatteryCalibrationArgs(const String& text, float& realV1, float& measuredV1, float& realV2, float& measuredV2) {
+    const int firstSpace = text.indexOf(' ');
+    if (firstSpace < 0) return false;
+
+    String args = text.substring(firstSpace + 1);
+    args.trim();
+
+    float parsed[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    int count = 0;
+    int start = 0;
+
+    while (start < args.length() && count < 4) {
+        while (start < args.length() && args.charAt(start) == ' ') ++start;
+        if (start >= args.length()) break;
+
+        int end = args.indexOf(' ', start);
+        if (end < 0) end = args.length();
+
+        String token = args.substring(start, end);
+        token.trim();
+        token.replace(',', '.');
+        if (token.length() == 0) return false;
+
+        parsed[count++] = token.toFloat();
+        start = end + 1;
+    }
+
+    if (count != 4) return false;
+
+    realV1 = parsed[0];
+    measuredV1 = parsed[1];
+    realV2 = parsed[2];
+    measuredV2 = parsed[3];
+    return true;
+}
+
 // ============================================================
 // Command handler
 // ============================================================
@@ -116,15 +154,20 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
 
     if (text == "/start" || text == "/status") {
         float temp = tempRead();
+        float battRaw = batteryReadRawVoltage();
         float battV = batteryReadVoltage();
         int battPct = batteryReadPercent();
         String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
         String battStr = String(battV, 2) + " V (" + String(battPct) + "%)";
+        String calState = batteryIsCalibrationEnabled() ? "ON" : "OFF";
         telegramSend(chatId.c_str(),
             "BirdNest online\nIP: " + WiFi.localIP().toString() +
             "\nTemp: " + tempStr +
             "\nBattery: " + battStr +
+            "\nBattery raw: " + String(battRaw, 2) + " V" +
+            "\nBattery calibration: " + calState +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
+            "\nOTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") +
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
             "\nFlip: " + (s_camFlip ? "ON" : "OFF"));
     }
@@ -212,6 +255,80 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(), "Camera flip set to " + String(s_camFlip ? "ON" : "OFF"));
         telegramSendDebug("Camera flip set to " + String(s_camFlip ? "ON" : "OFF") + " by chat " + chatId, 0);
     }
+    else if (text.startsWith("/battcalset ") || text.startsWith("/batcalset ") || text.startsWith("/battcal ") || text.startsWith("/batcal ")) {
+        float realV1 = 0.0f;
+        float measuredV1 = 0.0f;
+        float realV2 = 0.0f;
+        float measuredV2 = 0.0f;
+        if (!parseBatteryCalibrationArgs(text, realV1, measuredV1, realV2, measuredV2)) {
+            telegramSend(chatId.c_str(),
+                "Usage: /battcalset <real1> <measured1> <real2> <measured2>\n"
+                "Example: /battcalset 4.13 3.21 3.78 3.08\n"
+                "Alias: /batcalset ... or /batcal ...");
+            return;
+        }
+
+        if (!batterySetTwoPointCalibration(realV1, measuredV1, realV2, measuredV2)) {
+            telegramSend(chatId.c_str(),
+                "Calibration failed. Ensure measured points differ enough (at least ~0.01V).");
+            return;
+        }
+
+        float slope = 1.0f;
+        float offset = 0.0f;
+        float rv1 = 0.0f;
+        float mv1 = 0.0f;
+        float rv2 = 0.0f;
+        float mv2 = 0.0f;
+        batteryGetCalibration(slope, offset, rv1, mv1, rv2, mv2);
+
+        telegramSend(chatId.c_str(),
+            "Battery calibration saved.\n"
+            "a=" + String(slope, 6) + ", b=" + String(offset, 6) +
+            "\nNow: raw=" + String(batteryReadRawVoltage(), 3) + " V"
+            ", calibrated=" + String(batteryReadVoltage(), 3) + " V");
+        telegramSendDebug("Battery calibration updated by chat " + chatId, 0);
+    }
+    else if (text == "/battcal" || text == "/batcal") {
+        float slope = 1.0f;
+        float offset = 0.0f;
+        float realV1 = 0.0f;
+        float measuredV1 = 0.0f;
+        float realV2 = 0.0f;
+        float measuredV2 = 0.0f;
+        batteryGetCalibration(slope, offset, realV1, measuredV1, realV2, measuredV2);
+
+        String msgOut = "Battery calibration: " + String(batteryIsCalibrationEnabled() ? "ON" : "OFF") +
+                        "\nCurrent raw: " + String(batteryReadRawVoltage(), 3) + " V" +
+                        "\nCurrent calibrated: " + String(batteryReadVoltage(), 3) + " V" +
+                        "\nModel: Vreal = a*Vmeasured + b" +
+                        "\na=" + String(slope, 6) + ", b=" + String(offset, 6) +
+                        "\nP1: real=" + String(realV1, 3) + " V, measured=" + String(measuredV1, 3) + " V" +
+                        "\nP2: real=" + String(realV2, 3) + " V, measured=" + String(measuredV2, 3) + " V" +
+                        "\n\nSet: /battcalset <real1> <measured1> <real2> <measured2>" +
+                        "\nAlias: /batcalset ... or /batcal ..." +
+                        "\nExample: /battcalset 4.13 3.21 3.78 3.08" +
+                        "\nClear: /battcalclear";
+        telegramSend(chatId.c_str(), msgOut);
+    }
+    else if (text == "/battcalclear") {
+        batteryClearCalibration();
+        telegramSend(chatId.c_str(),
+            "Battery calibration cleared.\n"
+            "Now: raw=" + String(batteryReadRawVoltage(), 3) + " V"
+            ", calibrated=" + String(batteryReadVoltage(), 3) + " V");
+        telegramSendDebug("Battery calibration cleared by chat " + chatId, 0);
+    }
+    else if (text == "/reboot") {
+        if (!allowResetConfig) {
+            telegramSendDebug("Skipped stale /reboot from queued message");
+            return;
+        }
+        telegramSend(chatId.c_str(), "Rebooting now.");
+        telegramSendDebug("/reboot requested by chat " + chatId, 0);
+        delay(500);
+        ESP.restart();
+    }
 }
 
 // ============================================================
@@ -256,6 +373,7 @@ bool telegramSendDebug(const String& message, uint8_t level) {
 bool telegramSendWelcome() {
     int32_t rssi = WiFi.RSSI();
     float temp = tempRead();
+    float battRaw = batteryReadRawVoltage();
     float battV = batteryReadVoltage();
     int battPct = batteryReadPercent();
     String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
@@ -264,10 +382,13 @@ bool telegramSendWelcome() {
                  "IP: " + WiFi.localIP().toString() + "\n"
                  "WiFi RSSI: " + String(rssi) + " dBm\n"
                  "Battery: " + battStr + "\n"
+                 "Battery raw: " + String(battRaw, 2) + " V\n"
+                 "Battery calibration: " + String(batteryIsCalibrationEnabled() ? "ON" : "OFF") + "\n"
                  "Temp: " + tempStr + "\n\n"
                  "NVS runtime config:\n"
                  "Sleep: " + String(s_sleepSec / 60) + " min\n"
                  "Maintenance: " + String(s_maintMode ? "ON" : "OFF") + "\n"
+                 "OTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") + "\n"
                  "Debug verbosity: " + String(s_debugVerbosity) + "\n"
                  "Camera mirror: " + String(s_camMirror ? "ON" : "OFF") + "\n"
                  "Camera flip: " + String(s_camFlip ? "ON" : "OFF") + "\n"
@@ -275,11 +396,15 @@ bool telegramSendWelcome() {
                  "Commands:\n"
                  "/photo – take a photo now\n"
                  "/status – show status\n"
+                 "/reboot – reboot now\n"
                  "/maint_on – maintenance mode ON (deep sleep suppressed)\n"
                  "/maint_off – maintenance mode OFF\n"
                  "/sleepXX – deep sleep interval in minutes (00 = off)\n"
                  "/mirror0|1 – camera mirror OFF/ON\n"
                  "/flip0|1 – camera vertical flip OFF/ON\n"
+                 "/battcal – show battery calibration\n"
+                 "/battcalset r1 m1 r2 m2 – set two-point battery calibration\n"
+                 "/battcalclear – clear battery calibration\n"
                  "/reset_config – erase WiFi and stored credentials\n"
                  "/debug0|1|2 – debug verbosity (minimal/normal/verbose)";
     bool ok = telegramSend(getChatId(), msg);
