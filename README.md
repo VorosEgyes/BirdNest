@@ -4,7 +4,7 @@
 
 1. **Serial init** — initialize UART at 115200 baud for debug output
 2. **tempInit()** — DS18B20 on GPIO13 OneWire bus with internal pull-up
-3. **batteryInit()** — GPIO0 ADC setup for battery voltage reading
+3. **batteryInit()** — GPIO12 ADC setup for battery voltage reading
 4. **wifiInit()** — attempt STA connection (15 sec timeout); if fails, enter captive portal mode (180 sec)
 5. **otaInit()** and 8-second startup window — check for OTA updates
 6. **syncTimeIfNeeded()** — NTP sync with up to 30 retries, 200ms between each
@@ -72,7 +72,7 @@
 - `TEMP_SAMPLE_COUNT` samples averaged (1–2)
 
 ### Battery
-- ADC on GPIO0 with resistor divider formula
+- ADC on GPIO12 with resistor divider formula
 - Two-point calibration math using `bCalA`/`bCalB`
 
 ### OTA
@@ -116,23 +116,25 @@ Night sleep (12 hours OFF) saves 50%+ battery
 
 ---
 
-## Complete Hardware Pin Mapping
+## Complete Hardware Pin Mapping (AI-Thinker ESP32-CAM)
 
 | Function | Pin | Notes |
 |---|---|---|
-| Camera D0 | GPIO12 | Data pin |
-| Camera D1 | GPIO13 | Data pin |
-| Camera D2 | GPIO14 | Data pin |
-| Camera D3 | GPIO15 | Data pin |
-| Camera D4 | GPIO16 | Data pin |
-| Camera D5 | GPIO17 | Data pin |
-| Camera D6 | GPIO18 | Data pin |
-| Camera D7 | GPIO19 | Data pin |
-| HREF | GPIO2 | Control line |
-| VSYNC | GPIO3 | Control line |
-| PCLK | GPIO4 | Control line |
-| XCLK | GPIO5 | 20 MHz clock |
+| XCLK | GPIO0 | 20 MHz camera clock |
+| Camera D0 (Y2) | GPIO5 | Data pin |
+| Camera D1 (Y3) | GPIO18 | Data pin |
+| Camera D2 (Y4) | GPIO19 | Data pin |
+| Camera D3 (Y5) | GPIO21 | Data pin |
+| Camera D4 (Y6) | GPIO36 | Data pin |
+| Camera D5 (Y7) | GPIO39 | Data pin |
+| Camera D6 (Y8) | GPIO34 | Data pin |
+| Camera D7 (Y9) | GPIO35 | Data pin |
+| HREF | GPIO23 | Control line |
+| VSYNC | GPIO25 | Control line |
+| PCLK | GPIO22 | Control line |
+| SDA (I2C) | GPIO26 | Camera I2C data |
+| SCL (I2C) | GPIO27 | Camera I2C clock |
 | OneWire (DS18B20) | GPIO13 | OneWire bus |
-| ADC (Battery) | GPIO0 | ADC input |
+| ADC (Battery) | GPIO12 | Battery voltage measurement |
 | Flash LED | GPIO4 | PWM control |
 
