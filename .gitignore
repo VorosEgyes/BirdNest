@@ -5,3 +5,10 @@
 .vscode/ipch
 .DS_Store
 .vscode/tasks.json
+
+# KiCad temporary and backup files
+hardware/**/~*.kicad_*
+hardware/**/.history/
+hardware/**/*.kicad_prl
+hardware/**/*-backups/
+hardware/**/*.lck
