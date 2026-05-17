@@ -31,7 +31,8 @@ bool telegramGetCamFlip();
 void telegramSetCamMirror(bool enabled);
 void telegramSetCamFlip(bool enabled);
 
-// Send a welcome message to the main chat and the debug chat.
+// Send a welcome message to the main chat.
+// Optionally emits a brief verbose debug note when sending succeeds.
 // Returns true if the main chat message was sent successfully.
 bool telegramSendWelcome();
 

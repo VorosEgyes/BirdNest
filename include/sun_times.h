@@ -18,6 +18,8 @@
 
 static const uint32_t NIGHT_SLEEP_MAX_SEC = 12UL * 3600UL; // 12-hour safety cap
 static const uint16_t SUNRISE_BUFFER_MIN  = 15U;           // wake 15 min before sunrise
+static const int16_t NIGHT_SLEEP_START_OFFSET_MIN = -60;   // start night sleep 60 min earlier
+static const int16_t NIGHT_WAKE_OFFSET_MIN = 30;           // wake 30 min later
 
 struct SunTimes {
     uint16_t sunrise; // minutes from midnight, local time
@@ -81,7 +83,7 @@ static const SunTimes SUN_TABLE[52] = {
 };
 
 // ---------------------------------------------------------------
-// Returns seconds to sleep until (sunrise - SUNRISE_BUFFER_MIN).
+// Returns seconds to sleep until (sunrise - SUNRISE_BUFFER_MIN + NIGHT_WAKE_OFFSET_MIN).
 // Returns 0 if it is currently daytime – no night sleep needed.
 // Caps at NIGHT_SLEEP_MAX_SEC (12 h) as a safety fallback.
 // ---------------------------------------------------------------
@@ -91,10 +93,13 @@ inline uint32_t secondsUntilSunrise(int isoWeek, int currentMinutes) {
 
     const SunTimes& st = SUN_TABLE[isoWeek - 1];
 
-    uint16_t wakeMin  = (st.sunrise > SUNRISE_BUFFER_MIN)
-                        ? st.sunrise - SUNRISE_BUFFER_MIN
-                        : 0;
-    uint16_t sleepMin = st.sunset;
+    int wakeMin = static_cast<int>(st.sunrise) - static_cast<int>(SUNRISE_BUFFER_MIN) + static_cast<int>(NIGHT_WAKE_OFFSET_MIN);
+    if (wakeMin < 0) wakeMin = 0;
+    if (wakeMin > 1439) wakeMin = 1439;
+
+    int sleepMin = static_cast<int>(st.sunset) + static_cast<int>(NIGHT_SLEEP_START_OFFSET_MIN);
+    if (sleepMin < 0) sleepMin = 0;
+    if (sleepMin > 1439) sleepMin = 1439;
 
     // Daytime: between adjusted sunrise and sunset
     if (currentMinutes >= wakeMin && currentMinutes < sleepMin) {

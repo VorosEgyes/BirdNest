@@ -94,7 +94,7 @@ void otaInit() {
         s_lastOtaEventMs = millis();
         s_lastTransferSuccessful = false;
         Serial.println("[OTA] start");
-        telegramSendDebug("OTA update started", 0);
+        telegramSendDebug("[OTA] update started", 1);
     });
 
     ArduinoOTA.onEnd([]() {
@@ -103,7 +103,7 @@ void otaInit() {
         s_lastTransferSuccessful = true;
         otaClearRecovery();
         Serial.println("[OTA] finished");
-        telegramSendDebug("OTA update finished, rebooting...", 0);
+        telegramSendDebug("[OTA] update finished, rebooting", 1);
     });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -149,7 +149,7 @@ bool otaStartupWindow(float batteryVoltage) {
         batteryVoltage > 0.0f && batteryVoltage < OTA_RECOVERY_MIN_BATTERY_V;
 
     if (s_recoveryArmed && s_recoveryCyclesRemaining == 0) {
-        telegramSendDebug("OTA recovery attempts exhausted, clearing recovery latch", 0);
+        telegramSendDebug("[OTA] recovery attempts exhausted, clearing latch", 1);
         otaClearRecovery();
     }
 
@@ -160,19 +160,19 @@ bool otaStartupWindow(float batteryVoltage) {
     unsigned long windowStart = millis();
 
     if (extendedRecovery) {
-        telegramSendDebug("OTA recovery window open " + String(windowSec) + "s, attempts left after this: " +
-                              String(s_recoveryCyclesRemaining > 0 ? s_recoveryCyclesRemaining - 1 : 0), 0);
+        telegramSendDebug("[OTA] recovery window open " + String(windowSec) + "s, attempts left after this: " +
+                              String(s_recoveryCyclesRemaining > 0 ? s_recoveryCyclesRemaining - 1 : 0), 1);
     } else if (s_recoveryArmed && batteryTooLowForRecovery) {
-        telegramSendDebug("OTA recovery deferred, battery too low (" + String(batteryVoltage, 2) +
-                              " V < " + String(OTA_RECOVERY_MIN_BATTERY_V, 2) + " V)", 0);
+        telegramSendDebug("[OTA] recovery deferred, battery too low (" + String(batteryVoltage, 2) +
+                              " V < " + String(OTA_RECOVERY_MIN_BATTERY_V, 2) + " V)", 1);
     } else {
-        telegramSendDebug("OTA window open " + String(windowSec) + "s - start upload now", 0);
+        telegramSendDebug("[OTA] startup window open " + String(windowSec) + "s - start upload now", 2);
     }
 
     while ((millis() - windowStart) < windowMs) {
         if (!otaHandleWithWatchdog()) return false;
         if (s_otaActive) {
-            telegramSendDebug("OTA transfer started", 0);
+            telegramSendDebug("[OTA] transfer started", 1);
             while (s_otaActive) {
                 if (!otaHandleWithWatchdog()) return false;
                 delay(2);
@@ -188,16 +188,16 @@ bool otaStartupWindow(float batteryVoltage) {
     if (extendedRecovery && s_recoveryCyclesRemaining > 0) {
         --s_recoveryCyclesRemaining;
         saveRecoveryState();
-        telegramSendDebug("OTA recovery window closed, going back to sleep for retry", 0);
+        telegramSendDebug("[OTA] recovery window closed, sleeping before retry", 1);
         return false;
     }
 
     if (s_recoveryArmed && batteryTooLowForRecovery) {
-        telegramSendDebug("OTA recovery remains armed but will sleep to protect the battery", 0);
+        telegramSendDebug("[OTA] recovery remains armed, sleeping to protect battery", 1);
         return false;
     }
 
-    telegramSendDebug("OTA window closed, continuing boot", 0);
+    telegramSendDebug("[OTA] window closed, continuing boot", 2);
     return true;
 }
 

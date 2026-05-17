@@ -18,6 +18,7 @@ static char s_user[64] = {0};
 static char s_pass[64] = {0};
 static char s_topic[128] = {0};
 static bool s_hasConfig = false;
+static const uint8_t MQTT_SCHEMA_VERSION = 1;
 
 static unsigned long s_lastReconnectAttemptMs = 0;
 static unsigned long s_lastStatusPublishMs = 0;
@@ -34,6 +35,42 @@ static String makeTopic(const char* suffix) {
         topic += suffix;
     }
     return topic;
+}
+
+static String getStateTopic() {
+    return (s_topic[0] != '\0') ? makeTopic("") : makeTopic("status");
+}
+
+static String deriveSiblingTopic(const String& stateTopic, const char* suffix) {
+    const String statusSuffix = "/status";
+    if (stateTopic.endsWith(statusSuffix)) {
+        return stateTopic.substring(0, stateTopic.length() - statusSuffix.length()) + "/" + suffix;
+    }
+    return stateTopic + "/" + suffix;
+}
+
+static String getEventTopic() {
+    return deriveSiblingTopic(getStateTopic(), "event");
+}
+
+static String getAvailabilityTopic() {
+    return deriveSiblingTopic(getStateTopic(), "availability");
+}
+
+static void publishEvent(const char* eventType, const char* detail) {
+    if (!s_mqttClient.connected()) return;
+
+    char payload[256];
+    snprintf(payload, sizeof(payload),
+             "{\"schema_version\":%u,\"device\":\"%s\",\"event\":\"%s\",\"detail\":\"%s\",\"uptime_s\":%lu}",
+             static_cast<unsigned>(MQTT_SCHEMA_VERSION),
+             CAMERA_LABEL,
+             eventType ? eventType : "unknown",
+             detail ? detail : "",
+             static_cast<unsigned long>(millis() / 1000UL));
+
+    const String topic = getEventTopic();
+    s_mqttClient.publish(topic.c_str(), payload, false);
 }
 
 static String makeClientId() {
@@ -83,24 +120,42 @@ static bool ensureConnected() {
     s_lastReconnectAttemptMs = now;
 
     const String clientId = makeClientId();
+    const String availabilityTopic = getAvailabilityTopic();
     bool ok = false;
     if (s_user[0] != '\0') {
-        ok = s_mqttClient.connect(clientId.c_str(), s_user, s_pass);
+        ok = s_mqttClient.connect(
+            clientId.c_str(),
+            s_user,
+            s_pass,
+            availabilityTopic.c_str(),
+            1,
+            true,
+            "offline");
     } else {
-        ok = s_mqttClient.connect(clientId.c_str());
+        ok = s_mqttClient.connect(
+            clientId.c_str(),
+            nullptr,
+            nullptr,
+            availabilityTopic.c_str(),
+            1,
+            true,
+            "offline");
     }
 
     if (ok) {
         s_lastStatusPublishMs = 0;
-        telegramSendDebug("MQTT connected to " + String(s_host) + ":" + String(s_port), 1);
+        s_mqttClient.publish(availabilityTopic.c_str(), "online", true);
+        publishEvent("connected", "broker_session_open");
+        telegramSendDebug("[MQTT] connected to " + String(s_host) + ":" + String(s_port), 1);
     } else {
-        telegramSendDebug("MQTT connect failed, state=" + String(s_mqttClient.state()), 2);
+        telegramSendDebug("[MQTT] connect failed, state=" + String(s_mqttClient.state()), 2);
     }
 
     return ok;
 }
 
 void mqttInit() {
+    s_mqttClient.setBufferSize(512);
     loadConfig();
 }
 
@@ -131,7 +186,8 @@ void mqttPublishNow(const char* reason) {
 
     char payload[320];
     snprintf(payload, sizeof(payload),
-             "{\"device\":\"%s\",\"reason\":\"%s\",\"ip\":\"%s\",\"rssi\":%ld,\"uptime_s\":%lu,\"temp_c\":%.2f,\"battery_v\":%.3f,\"battery_pct\":%d,\"maint\":%s}",
+             "{\"schema_version\":%u,\"device\":\"%s\",\"reason\":\"%s\",\"ip\":\"%s\",\"rssi\":%ld,\"uptime_s\":%lu,\"temp_c\":%.2f,\"battery_v\":%.3f,\"battery_pct\":%d,\"maint\":%s}",
+             static_cast<unsigned>(MQTT_SCHEMA_VERSION),
              CAMERA_LABEL,
              reason ? reason : "manual",
              ipStr.c_str(),
@@ -142,7 +198,7 @@ void mqttPublishNow(const char* reason) {
              battPct,
              telegramIsMaintMode() ? "true" : "false");
 
-    const String topic = (s_topic[0] != '\0') ? makeTopic("") : makeTopic("status");
+    const String topic = getStateTopic();
     s_mqttClient.publish(topic.c_str(), payload, true);
     s_lastStatusPublishMs = millis();
 }
@@ -182,11 +238,18 @@ bool mqttSetConfig(const String& host, uint16_t port, const String& username, co
     saveConfig();
     s_mqttClient.disconnect();
     s_mqttClient.setServer(s_host, s_port);
+    publishEvent("config_updated", "mqtt_connection_settings_changed");
 
     return true;
 }
 
 void mqttClearConfig() {
+    if (s_mqttClient.connected()) {
+        const String availabilityTopic = getAvailabilityTopic();
+        s_mqttClient.publish(availabilityTopic.c_str(), "offline", true);
+        publishEvent("disabled", "mqtt_disabled_via_command");
+    }
+
     s_host[0] = '\0';
     s_user[0] = '\0';
     s_pass[0] = '\0';
@@ -232,6 +295,14 @@ void mqttResetStatusTopic() {
 String mqttGetStatusTopic() {
     if (s_topic[0] != '\0') return String(s_topic);
     return makeTopic("status");
+}
+
+String mqttGetEventTopic() {
+    return getEventTopic();
+}
+
+String mqttGetAvailabilityTopic() {
+    return getAvailabilityTopic();
 }
 
 String mqttBuildSetupCommand(const String& host, uint16_t port, const String& username, const String& password) {

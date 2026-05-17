@@ -24,6 +24,8 @@ void mqttGetConfig(String& host, uint16_t& port, String& username, String& passw
 bool mqttSetStatusTopic(const String& topic);
 void mqttResetStatusTopic();
 String mqttGetStatusTopic();
+String mqttGetEventTopic();
+String mqttGetAvailabilityTopic();
 
 // Convenience formatter for a single-message Telegram setup command.
 String mqttBuildSetupCommand(const String& host, uint16_t port, const String& username, const String& password);

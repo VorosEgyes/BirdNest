@@ -5,6 +5,7 @@
 #include "battery.h"
 #include "ota.h"
 #include "mqtt_client.h"
+#include "net_health.h"
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -220,40 +221,58 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
             "\nFlip: " + (s_camFlip ? "ON" : "OFF"));
     }
+    else if (text == "/netdiag") {
+        const wl_status_t wifiStatus = WiFi.status();
+        const bool connected = (wifiStatus == WL_CONNECTED);
+        const String ip = connected ? WiFi.localIP().toString() : "N/A";
+        const String rssi = connected ? String(WiFi.RSSI()) + " dBm" : "N/A";
+        const unsigned long uptimeSec = millis() / 1000UL;
+
+        String msg = "Network diagnostics\n"
+                     "WiFi: " + String(connected ? "CONNECTED" : "DISCONNECTED") +
+                     "\nIP: " + ip +
+                     "\nRSSI: " + rssi +
+                     "\nUptime: " + String(uptimeSec) + " s" +
+                     "\nReconnect attempts: " + String(netHealthGetReconnectAttempts()) +
+                     "\nDisconnect events: " + String(netHealthGetDisconnectCount()) +
+                     "\nLast disconnect at uptime: " + String(netHealthGetLastDisconnectUptimeSec()) + " s" +
+                     "\nCurrent disconnect duration: " + String(netHealthGetCurrentDisconnectDurationSec()) + " s";
+        telegramSend(chatId.c_str(), msg);
+    }
     else if (text == "/maint_on") {
         s_maintMode = true;
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Maintenance mode ON - deep sleep suppressed.");
-        telegramSendDebug("Maintenance mode enabled by chat " + chatId);
+        telegramSendDebug("[CMD] maintenance mode enabled by chat " + chatId, 1);
     }
     else if (text == "/maint_off") {
         s_maintMode = false;
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Maintenance mode OFF - deep sleep active.");
-        telegramSendDebug("Maintenance mode disabled by chat " + chatId);
+        telegramSendDebug("[CMD] maintenance mode disabled by chat " + chatId, 1);
 
         // Live /maint_off should return to power-saving mode immediately.
         // Do not force sleep while replaying queued startup messages.
         if (allowResetConfig && s_sleepCb && s_sleepSec > 0) {
-            telegramSendDebug("Entering deep sleep now after /maint_off", 1);
+            telegramSendDebug("[CMD] entering deep sleep after /maint_off", 1);
             delay(200);
             s_sleepCb(s_sleepSec);
         }
     }
     else if (text == "/photo") {
         telegramSend(chatId.c_str(), "Taking photo...");
-        telegramSendDebug("Manual /photo requested by chat " + chatId, 2);
+        telegramSendDebug("[CMD] manual /photo requested by chat " + chatId, 2);
         if (s_photoCb) s_photoCb(chatId.c_str());
     }
     else if (text == "/reset_config") {
         if (!allowResetConfig) {
             Serial.println("[TG] skipped stale /reset_config");
-            telegramSendDebug("Skipped stale /reset_config from queued message");
+            telegramSendDebug("[CMD] skipped stale /reset_config from startup queue", 2);
             return;
         }
         telegramSend(chatId.c_str(),
             "Resetting config. Connect to AP \"" AP_NAME "\" to reconfigure.");
-        telegramSendDebug("Executing /reset_config from chat " + chatId);
+        telegramSendDebug("[CMD] executing /reset_config requested by chat " + chatId, 0);
         delay(1000);
         wifiReset();
     }
@@ -267,11 +286,11 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             saveRuntimeConfig();
             if (s_sleepSec == 0) {
                 telegramSend(chatId.c_str(), "Deep sleep disabled.");
-                telegramSendDebug("Deep sleep disabled by /sleep00 from chat " + chatId);
+                telegramSendDebug("[CMD] deep sleep disabled by /sleep00 from chat " + chatId, 1);
             } else {
                 telegramSend(chatId.c_str(),
                     "Deep sleep set to " + String(minutes) + " min. Going to sleep now.");
-                telegramSendDebug("Deep sleep set to " + String(minutes) + " min by chat " + chatId);
+                telegramSendDebug("[CMD] deep sleep set to " + String(minutes) + " min by chat " + chatId, 1);
 
                 // Only execute immediate sleep for live commands.
                 // Startup queue replay must not force the device back to sleep.
@@ -290,19 +309,19 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         s_debugVerbosity = level;
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Debug verbosity set to " + String(level));
-        telegramSendDebug("Debug verbosity changed to " + String(level) + " by chat " + chatId, 0);
+        telegramSendDebug("[CMD] debug verbosity changed to " + String(level) + " by chat " + chatId, 1);
     }
     else if (text == "/mirror0" || text == "/mirror1") {
         s_camMirror = (text.charAt(7) == '1');
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Camera mirror set to " + String(s_camMirror ? "ON" : "OFF"));
-        telegramSendDebug("Camera mirror set to " + String(s_camMirror ? "ON" : "OFF") + " by chat " + chatId, 0);
+        telegramSendDebug("[CMD] camera mirror set to " + String(s_camMirror ? "ON" : "OFF") + " by chat " + chatId, 1);
     }
     else if (text == "/flip0" || text == "/flip1") {
         s_camFlip = (text.charAt(5) == '1');
         saveRuntimeConfig();
         telegramSend(chatId.c_str(), "Camera flip set to " + String(s_camFlip ? "ON" : "OFF"));
-        telegramSendDebug("Camera flip set to " + String(s_camFlip ? "ON" : "OFF") + " by chat " + chatId, 0);
+        telegramSendDebug("[CMD] camera flip set to " + String(s_camFlip ? "ON" : "OFF") + " by chat " + chatId, 1);
     }
     else if (text.startsWith("/battcalset ") || text.startsWith("/batcalset ") || text.startsWith("/battcal ") || text.startsWith("/batcal ")) {
         float realV1 = 0.0f;
@@ -336,7 +355,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "a=" + String(slope, 6) + ", b=" + String(offset, 6) +
             "\nNow: raw=" + String(batteryReadRawVoltage(), 3) + " V"
             ", calibrated=" + String(batteryReadVoltage(), 3) + " V");
-        telegramSendDebug("Battery calibration updated by chat " + chatId, 0);
+        telegramSendDebug("[CMD] battery calibration updated by chat " + chatId, 1);
     }
     else if (text == "/battcal" || text == "/batcal") {
         float slope = 1.0f;
@@ -366,15 +385,15 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "Battery calibration cleared.\n"
             "Now: raw=" + String(batteryReadRawVoltage(), 3) + " V"
             ", calibrated=" + String(batteryReadVoltage(), 3) + " V");
-        telegramSendDebug("Battery calibration cleared by chat " + chatId, 0);
+        telegramSendDebug("[CMD] battery calibration cleared by chat " + chatId, 1);
     }
     else if (text == "/reboot") {
         if (!allowResetConfig) {
-            telegramSendDebug("Skipped stale /reboot from queued message");
+            telegramSendDebug("[CMD] skipped stale /reboot from startup queue", 2);
             return;
         }
         telegramSend(chatId.c_str(), "Rebooting now.");
-        telegramSendDebug("/reboot requested by chat " + chatId, 0);
+        telegramSendDebug("[CMD] /reboot requested by chat " + chatId, 0);
         delay(500);
         ESP.restart();
     }
@@ -384,7 +403,9 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         String pass;
         uint16_t port = MQTT_DEFAULT_PORT;
         mqttGetConfig(host, port, user, pass);
-        const String topic = mqttGetStatusTopic();
+        const String stateTopic = mqttGetStatusTopic();
+        const String eventTopic = mqttGetEventTopic();
+        const String availabilityTopic = mqttGetAvailabilityTopic();
 
         if (!mqttHasConfig()) {
             telegramSend(chatId.c_str(),
@@ -402,7 +423,10 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "MQTT config:\n"
             "Host: " + host + "\n"
             "Port: " + String(port) + "\n"
-                "Channel: " + topic + "\n"
+            "State topic: " + stateTopic + "\n"
+            "Event topic: " + eventTopic + "\n"
+            "Availability topic: " + availabilityTopic + "\n"
+            "Schema version: 1\n"
             "Auth: " + authState + "\n\n"
             "Reusable setup command (single message):\n" + command +
                 "\n\nCommands:\n/mqttset <ip> <port> <user|-> <pass|->\n/mqtttopic <topic>\n/mqtttopic_reset\n/mqttoff");
@@ -435,12 +459,12 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "Host: " + host + "\nPort: " + String(port) +
             "\nAuth: " + String(user.length() > 0 ? "ON" : "OFF") +
             "\n\nReusable one-message command:\n" + reusable);
-        telegramSendDebug("MQTT config updated by chat " + chatId, 0);
+        telegramSendDebug("[MQTT] config updated by chat " + chatId, 1);
     }
     else if (text == "/mqttoff") {
         mqttClearConfig();
         telegramSend(chatId.c_str(), "MQTT disabled and credentials cleared.");
-        telegramSendDebug("MQTT disabled by chat " + chatId, 0);
+        telegramSendDebug("[MQTT] disabled by chat " + chatId, 1);
     }
     else if (text.startsWith("/mqtttopic ")) {
         String topic = text.substring(11);
@@ -456,12 +480,12 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         }
 
         telegramSend(chatId.c_str(), "MQTT channel set to: " + mqttGetStatusTopic());
-        telegramSendDebug("MQTT topic updated by chat " + chatId + " to " + mqttGetStatusTopic(), 0);
+        telegramSendDebug("[MQTT] topic updated by chat " + chatId + " to " + mqttGetStatusTopic(), 1);
     }
     else if (text == "/mqtttopic_reset") {
         mqttResetStatusTopic();
         telegramSend(chatId.c_str(), "MQTT channel reset to default: " + mqttGetStatusTopic());
-        telegramSendDebug("MQTT topic reset by chat " + chatId, 0);
+        telegramSendDebug("[MQTT] topic reset by chat " + chatId, 1);
     }
 }
 
@@ -498,10 +522,14 @@ bool telegramSend(const char* chatId, const String& message) {
 }
 
 bool telegramSendDebug(const String& message, uint8_t level) {
+    // Verbosity policy:
+    // L0: critical failures / disruptive actions
+    // L1: important state transitions
+    // L2: verbose diagnostics and progress details
     if (level > s_debugVerbosity) return true;
     const char* debugChat = getDebugChatId();
     if (!debugChat || debugChat[0] == '\0') return false;
-    return telegramSend(debugChat, "[DEBUG] " + message);
+    return telegramSend(debugChat, "[DEBUG L" + String(level) + "] " + message);
 }
 
 bool telegramSendWelcome() {
@@ -530,6 +558,7 @@ bool telegramSendWelcome() {
                  "Commands:\n"
                  "/photo – take a photo now\n"
                  "/status – show status\n"
+                 "/netdiag – show network diagnostics\n"
                  "/reboot – reboot now\n"
                  "/maint_on – maintenance mode ON (deep sleep suppressed)\n"
                  "/maint_off – maintenance mode OFF\n"
@@ -547,7 +576,9 @@ bool telegramSendWelcome() {
                  "/reset_config – erase WiFi and stored credentials\n"
                  "/debug0|1|2 – debug verbosity (minimal/normal/verbose)";
     bool ok = telegramSend(getChatId(), msg);
-    telegramSendDebug(msg);
+    if (ok) {
+        telegramSendDebug("[BOOT] welcome/status message sent to main chat", 2);
+    }
     return ok;
 }
 
@@ -570,12 +601,12 @@ void telegramProcessStartupMessages() {
 
     while (msgCount) {
         if (processed >= STARTUP_MSG_PROCESS_LIMIT || (millis() - startMs) >= STARTUP_MSG_TIME_LIMIT_MS) {
-            telegramSendDebug("Startup queue limit reached, deferring remaining messages", 1);
+            telegramSendDebug("[TG] startup queue limit reached, deferring remaining messages", 1);
             break;
         }
 
         Serial.println("[TG] processing " + String(msgCount) + " queued message(s)");
-        telegramSendDebug("Processing " + String(msgCount) + " queued Telegram message(s)", 2);
+        telegramSendDebug("[TG] processing " + String(msgCount) + " queued Telegram message(s)", 2);
         for (int i = 0; i < msgCount; i++) {
             if (processed >= STARTUP_MSG_PROCESS_LIMIT || (millis() - startMs) >= STARTUP_MSG_TIME_LIMIT_MS) {
                 break;

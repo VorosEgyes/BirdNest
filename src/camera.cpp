@@ -34,6 +34,29 @@
 #define FLASH_RES         8
 
 static bool s_flashInited = false;
+static String s_lastPhotoError = "none";
+
+static void setLastPhotoError(const String& reason) {
+    s_lastPhotoError = reason;
+    Serial.println("[CAM] fail reason: " + reason);
+}
+
+static camera_fb_t* getFrameWithRetries(const char* phase, int index) {
+    const int retries = CAMERA_FB_GET_RETRIES > 0 ? CAMERA_FB_GET_RETRIES : 1;
+    for (int attempt = 1; attempt <= retries; ++attempt) {
+        camera_fb_t* fb = esp_camera_fb_get();
+        if (fb) return fb;
+
+        Serial.println("[CAM] fb_get failed at " + String(phase) + " " + String(index) +
+                       " attempt " + String(attempt) + "/" + String(retries));
+        if (attempt < retries) {
+            delay(CAMERA_FB_GET_RETRY_DELAY_MS);
+            yield();
+        }
+    }
+    return nullptr;
+}
+
 static bool writeAll(WiFiClientSecure& client, const uint8_t* data, size_t len, unsigned long timeoutMs) {
     size_t totalWritten = 0;
     unsigned long start = millis();
@@ -104,14 +127,26 @@ bool cameraInit() {
         cfg.fb_count     = 1;
     }
 
-    if (esp_camera_init(&cfg) != ESP_OK) {
-        Serial.println("[CAM] init failed, retrying...");
+    esp_err_t initErr = esp_camera_init(&cfg);
+    if (initErr == ESP_ERR_INVALID_STATE) {
+        // Camera was already initialized (e.g. deinit did not complete cleanly).
+        // Deinit, wait for hardware I2C/DMA to settle, then retry.
+        Serial.println("[CAM] already init – deiniting and retrying");
+        esp_camera_deinit();
+        delay(150);
+        initErr = esp_camera_init(&cfg);
+    }
+    if (initErr != ESP_OK) {
+        Serial.println("[CAM] init failed, retrying (500ms)...");
         delay(500);
         if (esp_camera_init(&cfg) != ESP_OK) {
             Serial.println("[CAM] init FAILED (2nd attempt)");
             return false;
         }
     }
+    // Allow I2C and DMA to stabilise before sensor register writes and fb_get.
+    // This is the critical gap the live project relies on (it never deinits mid-session).
+    delay(120);
     Serial.println("[CAM] init OK");
 
     flashOff();
@@ -125,11 +160,15 @@ bool cameraInit() {
     s->set_awb_gain(s, 1);
     s->set_wb_mode(s, 0);
 
-    // Gain + Exposure – auto mode so the sensor adapts to any light condition
-    s->set_gain_ctrl(s, 1);              // AGC ON - auto gain
-    s->set_gainceiling(s, (gainceiling_t)6); // max auto gain ceiling (128x)
-    s->set_exposure_ctrl(s, 1);          // AEC ON - auto exposure
-    s->set_aec2(s, 1);                   // AEC DSP algorithm ON
+    // Gain + Exposure – live project parity:
+    // AGC is OFF; gain is set to 0 (minimum). The manual OV2640 register ladder
+    // in the init sequence below is responsible for controlling exposure time.
+    // With AGC ON the hardware would fight our manual 0x45/0x46/0x2a/0x2b writes.
+    s->set_gain_ctrl(s, 0);              // AGC OFF – manual exposure via register ladder
+    s->set_agc_gain(s, 0);              // manual gain value = 0 (no amplification)
+    s->set_gainceiling(s, (gainceiling_t)6); // ceiling retained (used if AGC ever re-enabled)
+    s->set_exposure_ctrl(s, 1);          // AEC ON – auto exposure timing (sensor default)
+    s->set_aec2(s, 1);                   // AEC DSP ON (sensor default)
 
     // Lens / correction
     // set_lenc: 0 = lens distortion correction OFF (it can darken the corners on some modules)
@@ -142,6 +181,7 @@ bool cameraInit() {
     s->set_raw_gma(s, 1);
 
     // Image quality controls (color, contrast, brightness, sharpness) from build flags, range -2..+2
+    // NOTE: baseline defaults remain active; dynamic profile below can override by light condition.
     // Saturation: -2 = grayscale-like, 0 = neutral, +2 = vivid colors
     s->set_saturation(s, CAMERA_SATURATION);
     // Contrast: -2 = flat/washed out, 0 = neutral, +2 = punchy and more defined
@@ -161,12 +201,11 @@ bool cameraInit() {
     // Read ambient light and apply exposure registers (from live project)
     s->set_reg(s, 0xff, 0xff, 0x01); // bank sel
     int light = s->get_reg(s, 0x2f, 0xff);
-    // CAMERA_DAY_THRESHOLD (build flag, default 140): values below this switch to night mode
-    // Lower it if dark conditions are still treated as daytime; raise it if daytime falls into night mode
+    // CAMERA_DAY_THRESHOLD (build flag, default 140): values below this switch to lowlight mode
+    // Lower it if dark/cloudy conditions are still treated as daytime; raise it if daytime falls into lowlight mode
     const int DAY_THRESHOLD = CAMERA_DAY_THRESHOLD;
-
     if (light < DAY_THRESHOLD) {
-        // Night mode
+        // Lowlight mode
         if (light < 45) s->set_reg(s, 0x11, 0xff, 1);
         s->set_reg(s, 0x13, 0xff, 0);
         s->set_reg(s, 0x0c, 0x6,  0x8);
@@ -177,17 +216,18 @@ bool cameraInit() {
         s->set_reg(s, 0x2e, 0xff, 0x0);
         s->set_reg(s, 0x47, 0xff, 0x0);
 
-        if      (light < 150) { s->set_reg(s,0x46,0xff,0xd0); s->set_reg(s,0x2a,0xff,0xff); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 160) { s->set_reg(s,0x46,0xff,0xc0); s->set_reg(s,0x2a,0xff,0xb0); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 170) { s->set_reg(s,0x46,0xff,0xb0); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 180) { s->set_reg(s,0x46,0xff,0xa8); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 190) { s->set_reg(s,0x46,0xff,0xa6); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 200) { s->set_reg(s,0x46,0xff,0xa4); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 210) { s->set_reg(s,0x46,0xff,0x98); s->set_reg(s,0x2a,0xff,0x60); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 220) { s->set_reg(s,0x46,0xff,0x80); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 230) { s->set_reg(s,0x46,0xff,0x70); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0xff); }
-        else if (light < 240) { s->set_reg(s,0x46,0xff,0x60); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0x80); }
-        else if (light < 253) { s->set_reg(s,0x46,0xff,0x10); s->set_reg(s,0x2a,0xff,0x0);  s->set_reg(s,0x2b,0xff,0x40); }
+        // 0x45 = exposure fine-tune (live project parity: each bracket includes it)
+        if      (light < 150) { s->set_reg(s,0x46,0xff,0xd0); s->set_reg(s,0x2a,0xff,0xff); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0xff); }
+        else if (light < 160) { s->set_reg(s,0x46,0xff,0xc0); s->set_reg(s,0x2a,0xff,0xb0); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 170) { s->set_reg(s,0x46,0xff,0xb0); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 180) { s->set_reg(s,0x46,0xff,0xa8); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 190) { s->set_reg(s,0x46,0xff,0xa6); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x90); }
+        else if (light < 200) { s->set_reg(s,0x46,0xff,0xa4); s->set_reg(s,0x2a,0xff,0x80); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 210) { s->set_reg(s,0x46,0xff,0x98); s->set_reg(s,0x2a,0xff,0x60); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 220) { s->set_reg(s,0x46,0xff,0x80); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 230) { s->set_reg(s,0x46,0xff,0x70); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0xff); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 240) { s->set_reg(s,0x46,0xff,0x60); s->set_reg(s,0x2a,0xff,0x20); s->set_reg(s,0x2b,0xff,0x80); s->set_reg(s,0x45,0xff,0x10); }
+        else if (light < 253) { s->set_reg(s,0x46,0xff,0x10); s->set_reg(s,0x2a,0xff,0x0);  s->set_reg(s,0x2b,0xff,0x40); s->set_reg(s,0x45,0xff,0x10); }
         else                  { s->set_reg(s,0x46,0xff,0x0);  s->set_reg(s,0x2a,0xff,0x0);  s->set_reg(s,0x2b,0xff,0x0);
                                 s->set_reg(s,0x45,0xff,0x0);  s->set_reg(s,0x10,0xff,0x0); }
 
@@ -198,10 +238,51 @@ bool cameraInit() {
         s->set_reg(s, 0x43, 0xff, 0x11);
     }
 
-    // Consume one warm-up frame after exposure setup
+    // Consume one warm-up frame after exposure setup.
+    // After the grab, apply the fine-grained per-light-value register ladder
+    // (ported 1:1 from the live project's configInitCamera).
+    // This is the critical second-pass tuning that the live project does post-fb_get.
     camera_fb_t* fb = esp_camera_fb_get();
 
-    if (light < DAY_THRESHOLD) s->set_reg(s, 0x43, 0xff, 0x40);
+    // Post-fb fine-tuning for lowlight / medium-light (light < DAY_THRESHOLD).
+    // Registers 0x47 (Frame Length MSB), 0x2a/0x2b (line adjust) control
+    // effective exposure time. Values decrease as light increases.
+    if (light < DAY_THRESHOLD) {
+        if      (light == 0)   { s->set_reg(s,0x47,0xff,0x40); s->set_reg(s,0x2a,0xf0,0xf0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 1)   { s->set_reg(s,0x47,0xff,0x40); s->set_reg(s,0x2a,0xf0,0xd0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 2)   { s->set_reg(s,0x47,0xff,0x40); s->set_reg(s,0x2a,0xf0,0xb0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 3)   { s->set_reg(s,0x47,0xff,0x40); s->set_reg(s,0x2a,0xf0,0x70); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 4)   { s->set_reg(s,0x47,0xff,0x40); s->set_reg(s,0x2a,0xf0,0x40); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 5)   { s->set_reg(s,0x47,0xff,0x20); s->set_reg(s,0x2a,0xf0,0x80); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 6)   { s->set_reg(s,0x47,0xff,0x20); s->set_reg(s,0x2a,0xf0,0x40); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 7)   { s->set_reg(s,0x47,0xff,0x20); s->set_reg(s,0x2a,0xf0,0x30); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 8)   { s->set_reg(s,0x47,0xff,0x20); s->set_reg(s,0x2a,0xf0,0x20); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 9)   { s->set_reg(s,0x47,0xff,0x20); s->set_reg(s,0x2a,0xf0,0x10); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light == 10)  { s->set_reg(s,0x47,0xff,0x10); s->set_reg(s,0x2a,0xf0,0x70); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 12)  { s->set_reg(s,0x47,0xff,0x10); s->set_reg(s,0x2a,0xf0,0x60); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 14)  { s->set_reg(s,0x47,0xff,0x10); s->set_reg(s,0x2a,0xf0,0x40); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 18)  { s->set_reg(s,0x47,0xff,0x08); s->set_reg(s,0x2a,0xf0,0xb0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 20)  { s->set_reg(s,0x47,0xff,0x08); s->set_reg(s,0x2a,0xf0,0x80); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 23)  { s->set_reg(s,0x47,0xff,0x08); s->set_reg(s,0x2a,0xf0,0x60); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 27)  { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0xd0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 31)  { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0x80); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 35)  { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0x60); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light <= 40)  { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x70); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light < 45)   { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x40); s->set_reg(s,0x2b,0xff,0xff); }
+        // medium-light (frame rate higher after 45, so compensate)
+        else if (light < 50)   { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0xa0); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light < 55)   { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0x70); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light < 65)   { s->set_reg(s,0x47,0xff,0x04); s->set_reg(s,0x2a,0xf0,0x30); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light < 75)   { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x80); s->set_reg(s,0x2b,0xff,0xff); }
+        else if (light < 90)   { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x50); s->set_reg(s,0x2b,0xff,0xbf); }
+        else if (light < 100)  { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x20); s->set_reg(s,0x2b,0xff,0x8f); }
+        else if (light < 110)  { s->set_reg(s,0x47,0xff,0x02); s->set_reg(s,0x2a,0xf0,0x10); s->set_reg(s,0x2b,0xff,0x7f); }
+        else if (light < 120)  { s->set_reg(s,0x47,0xff,0x01); s->set_reg(s,0x2a,0xf0,0x10); }
+        else if (light < 130)  { s->set_reg(s,0x47,0xff,0x00); s->set_reg(s,0x2a,0xf0,0x00); s->set_reg(s,0x2b,0xff,0x2f); }
+        else                   { s->set_reg(s,0x47,0xff,0x00); s->set_reg(s,0x2a,0xf0,0x00); s->set_reg(s,0x2b,0xff,0x00); }
+        // Magic value: speeds up frame delivery while keeping exposure effective
+        s->set_reg(s, 0x43, 0xff, 0x40);
+    }
 
     s->set_reg(s, 0xff, 0xff, 0x00);
     s->set_reg(s, 0xd3, 0xff, 0x8);
@@ -217,41 +298,63 @@ bool cameraInit() {
 
 void cameraDeinit() {
     esp_camera_deinit();
+    // Brief delay so I2C/DMA hardware fully settles before any subsequent init.
+    delay(100);
 }
 
 // ============================================================
 // Photo capture + Telegram upload
 // ============================================================
 bool cameraSendPhoto(const char* chatId) {
-    if (!chatId || chatId[0] == '\0') return false;
+    setLastPhotoError("none");
+    if (!chatId || chatId[0] == '\0') {
+        setLastPhotoError("empty_chat_id");
+        return false;
+    }
 
      unsigned long t_start = millis();
      const char* token = getBotToken();
-     if (!token || token[0] == '\0') return false;
+     if (!token || token[0] == '\0') {
+         setLastPhotoError("missing_bot_token");
+         return false;
+     }
      if (WiFi.status() != WL_CONNECTED) {
          Serial.println("[CAM] WiFi not connected before upload");
+         setLastPhotoError("wifi_not_connected_before_upload");
          return false;
      }
 
      flashOff();
 
-     // Take warm-up frames so AEC/AWB stabilises
+     // Take warm-up frames so AEC/AWB stabilises.
+     // Keep the last successful warmup frame as final capture candidate.
      const int warmupFrames = CAMERA_WARMUP_FRAMES > 0 ? CAMERA_WARMUP_FRAMES : 1;
      unsigned long t_capture_start = millis();
      camera_fb_t* fb = nullptr;
      for (int i = 0; i < warmupFrames; i++) {
-         if (fb) esp_camera_fb_return(fb);
-         fb = esp_camera_fb_get();
-         if (!fb) {
-             Serial.println("[CAM] fb_get failed at warmup " + String(i));
-             if (i == warmupFrames - 1) return false;
+         camera_fb_t* warmupFb = getFrameWithRetries("warmup", i);
+         if (!warmupFb) {
+             Serial.println("[CAM] warmup frame skipped at index " + String(i));
+         } else {
+             if (fb) esp_camera_fb_return(fb);
+             fb = warmupFb;
          }
+
          if (i < warmupFrames - 1) {
-             // split delay so watchdog stays fed
+             // Live-parity stabilization delay between warmup frames.
+             // Rollback option: reduce if capture latency is more important than exposure stability.
              for (int d = 0; d < 4; d++) { delay(100); yield(); }
          }
      }
-     if (!fb) return false;
+
+     // If all warmup captures failed, do one mandatory final capture attempt group.
+     if (!fb) {
+         fb = getFrameWithRetries("final", 0);
+     }
+     if (!fb) {
+         setLastPhotoError("camera_fb_get_failed_final");
+         return false;
+     }
      unsigned long t_capture_done = millis();
      Serial.println("[CAM] captured " + String(fb->len) + " bytes in " + String(t_capture_done - t_capture_start) + "ms");
 
@@ -285,6 +388,7 @@ bool cameraSendPhoto(const char* chatId) {
      unsigned long t_connect_start = millis();
      if (!client.connect(host, 443)) {
          Serial.println("[CAM] connect FAILED");
+         setLastPhotoError("telegram_tls_connect_failed");
          esp_camera_fb_return(fb);
          return false;
      }
@@ -301,6 +405,7 @@ bool cameraSendPhoto(const char* chatId) {
     if (!writeAll(client, reinterpret_cast<const uint8_t*>(requestHeaders.c_str()), requestHeaders.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS) ||
         !writeAll(client, reinterpret_cast<const uint8_t*>(head.c_str()), head.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
         Serial.println("[CAM] failed to send HTTP headers/body prefix");
+        setLastPhotoError("upload_failed_headers_or_prefix");
         esp_camera_fb_return(fb);
         return false;
     }
@@ -317,6 +422,7 @@ bool cameraSendPhoto(const char* chatId) {
         size_t chunk = ((n + uploadChunk) < len) ? uploadChunk : (len - n);
         if (!writeAll(client, buf + n, chunk, CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
             Serial.println("[CAM] upload write failed at offset " + String(n));
+            setLastPhotoError("upload_chunk_write_failed_offset_" + String(n));
             writeFailed = true;
             break;
         }
@@ -331,6 +437,7 @@ bool cameraSendPhoto(const char* chatId) {
     }
     if (!writeFailed && !writeAll(client, reinterpret_cast<const uint8_t*>(tail.c_str()), tail.length(), CAMERA_UPLOAD_CHUNK_TIMEOUT_MS)) {
         Serial.println("[CAM] failed to send multipart tail");
+        setLastPhotoError("upload_multipart_tail_failed");
         writeFailed = true;
     }
     unsigned long t_send_done = millis();
@@ -376,8 +483,22 @@ bool cameraSendPhoto(const char* chatId) {
         unsigned long t_done = millis();
         Serial.println("[CAM] response OK=" + String(ok ? "true" : "false") + ", total time " + String(t_done - t_start) + "ms");
     Serial.println("[CAM] response body: " + getBody.substring(0, 120));
+    if (!ok) {
+        String bodySnippet = getBody.substring(0, 120);
+        bodySnippet.replace("\n", " ");
+        bodySnippet.replace("\r", " ");
+        if (bodySnippet.length() == 0) {
+            setLastPhotoError("telegram_response_not_ok_empty_body");
+        } else {
+            setLastPhotoError("telegram_response_not_ok_" + bodySnippet);
+        }
+    }
     client.stop();
 
     if (fb) esp_camera_fb_return(fb);
     return ok;
+}
+
+String cameraGetLastError() {
+    return s_lastPhotoError;
 }

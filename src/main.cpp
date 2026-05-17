@@ -13,6 +13,7 @@
 #include "battery.h"
 #include "sun_times.h"
 #include "mqtt_client.h"
+#include "net_health.h"
 
 // ============================================================
 // Global timers
@@ -23,6 +24,66 @@ static const unsigned long PHOTO_INTERVAL_MS =
     static_cast<unsigned long>(PHOTO_INTERVAL_SEC) * 1000UL;
 static const uint32_t WIFI_RETRY_BACKOFF_SEC = 300;
 static bool s_timeSynced = false;
+static unsigned long s_wifiDownSinceMs = 0;
+static unsigned long s_lastWifiReconnectMs = 0;
+
+static bool wifiConnectWithRetries() {
+    const int retries = WIFI_BOOT_CONNECT_RETRIES > 0 ? WIFI_BOOT_CONNECT_RETRIES : 1;
+    const unsigned long backoffMs = static_cast<unsigned long>(WIFI_BOOT_RETRY_BACKOFF_SEC) * 1000UL;
+
+    for (int attempt = 1; attempt <= retries; ++attempt) {
+        if (wifiInit()) {
+            if (attempt > 1) {
+                telegramSendDebug("[WIFI] connected after retry " + String(attempt), 1);
+            }
+            return true;
+        }
+
+        if (attempt < retries) {
+            Serial.println("[WIFI] boot retry " + String(attempt) + "/" + String(retries));
+            delay(backoffMs);
+            yield();
+        }
+    }
+
+    return false;
+}
+
+static bool wifiRuntimeRecoveryTick() {
+    if (WiFi.status() == WL_CONNECTED) {
+        if (s_wifiDownSinceMs != 0) {
+            netHealthOnReconnectSuccess();
+        }
+        s_wifiDownSinceMs = 0;
+        return true;
+    }
+
+    const unsigned long now = millis();
+    if (s_wifiDownSinceMs == 0) {
+        s_wifiDownSinceMs = now;
+        s_lastWifiReconnectMs = 0;
+        netHealthOnWifiDown();
+        Serial.println("[WIFI] runtime disconnect detected");
+    }
+
+    const unsigned long reconnectIntervalMs =
+        static_cast<unsigned long>(WIFI_RUNTIME_RECONNECT_INTERVAL_SEC) * 1000UL;
+    if ((now - s_lastWifiReconnectMs) >= reconnectIntervalMs) {
+        s_lastWifiReconnectMs = now;
+        netHealthOnReconnectAttempt();
+        Serial.println("[WIFI] runtime reconnect attempt");
+        WiFi.reconnect();
+    }
+
+    const unsigned long rebootAfterMs =
+        static_cast<unsigned long>(WIFI_RUNTIME_REBOOT_AFTER_SEC) * 1000UL;
+    if (rebootAfterMs > 0 && (now - s_wifiDownSinceMs) >= rebootAfterMs && !otaIsActive()) {
+        Serial.println("[WIFI] disconnected too long, rebooting failsafe");
+        ESP.restart();
+    }
+
+    return false;
+}
 
 static bool syncTimeIfNeeded() {
     if (s_timeSynced) return true;
@@ -43,7 +104,7 @@ static bool syncTimeIfNeeded() {
     }
 
     Serial.println("[NTP] sync failed");
-    telegramSendDebug("NTP sync failed");
+    telegramSendDebug("[NTP] sync failed", 1);
     return false;
 }
 
@@ -68,7 +129,7 @@ static void enterDeepSleepSeconds(uint32_t seconds) {
         return;
     }
     String nextWake = syncTimeIfNeeded() ? formatNextWakeTime(seconds) : "unknown";
-    String sleepMsg = "Going to deep sleep. Next wake-up: " + nextWake;
+    String sleepMsg = "[PWR] going to deep sleep. Next wake-up: " + nextWake;
 
     telegramSendDebug(sleepMsg, 0);
 
@@ -82,21 +143,32 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
 
     if (!cameraInit()) {
         Serial.println("[PHOTO] cameraInit FAILED");
-        telegramSendDebug("cameraInit failed");
+        telegramSendDebug("[PHOTO] cameraInit failed", 0);
         return false;
     }
 
-    bool ok = cameraSendPhoto(chatId);
-    if (!ok && retryOnce) {
-        Serial.println("[PHOTO] first send failed, retrying once...");
-        telegramSendDebug("Photo send failed, retrying once");
-        delay(500);
+    const int maxTries = retryOnce ? (PHOTO_SEND_MAX_RETRIES > 1 ? PHOTO_SEND_MAX_RETRIES : 2) : 1;
+    bool ok = false;
+    for (int attempt = 1; attempt <= maxTries; ++attempt) {
         ok = cameraSendPhoto(chatId);
+        if (ok) break;
+
+        const String failReason = cameraGetLastError();
+        telegramSendDebug("[PHOTO] attempt " + String(attempt) + "/" + String(maxTries) + " failed: " + failReason, 2);
+
+        if (attempt < maxTries) {
+            Serial.println("[PHOTO] send failed, retrying...");
+            WiFi.reconnect();
+            const unsigned long backoffMs = static_cast<unsigned long>(PHOTO_SEND_RETRY_BACKOFF_MS) * static_cast<unsigned long>(attempt);
+            telegramSendDebug("[PHOTO] retrying in " + String(backoffMs) + " ms (next attempt " + String(attempt + 1) + "/" + String(maxTries) + ")", 1);
+            delay(backoffMs);
+            yield();
+        }
     }
 
     cameraDeinit();
     Serial.println(ok ? "[PHOTO] sent OK" : "[PHOTO] send FAILED");
-    if (!ok) telegramSendDebug("Photo send failed after retry");
+    if (!ok) telegramSendDebug("[PHOTO] failed after " + String(maxTries) + " attempts. Last error: " + cameraGetLastError(), 0);
     return ok;
 }
 
@@ -106,7 +178,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
 
 static void onPhotoRequest(const char* chatId) {
     Serial.println("[PHOTO] starting...");
-    telegramSendDebug("Starting manual photo capture");
+    telegramSendDebug("[PHOTO] manual capture requested", 1);
     if (!captureAndSendPhoto(chatId, true)) {
         telegramSend(chatId, "Photo capture/send failed.");
     }
@@ -141,8 +213,9 @@ static void nightSleepIfNeeded() {
 
     // Format expected wake time for the notification
     int idx = (isoWeek < 1 ? 0 : isoWeek > 52 ? 51 : isoWeek - 1);
-    uint16_t wakeMin = (SUN_TABLE[idx].sunrise > SUNRISE_BUFFER_MIN)
-                       ? SUN_TABLE[idx].sunrise - SUNRISE_BUFFER_MIN : 0;
+    int wakeMin = static_cast<int>(SUN_TABLE[idx].sunrise) - static_cast<int>(SUNRISE_BUFFER_MIN) + static_cast<int>(NIGHT_WAKE_OFFSET_MIN);
+    if (wakeMin < 0) wakeMin = 0;
+    if (wakeMin > 1439) wakeMin = 1439;
     char wakeBuf[6];
     snprintf(wakeBuf, sizeof(wakeBuf), "%02d:%02d", wakeMin / 60, wakeMin % 60);
 
@@ -156,8 +229,8 @@ static void nightSleepIfNeeded() {
                  "m, until sunrise (~" + String(wakeBuf) + ").";
     const char* chatId = getChatId();
     if (chatId && chatId[0] != '\0') telegramSend(chatId, msg);
-    telegramSendDebug("[NIGHT] Sleep " + String(sleepHours) + "h " + String(sleepMinutes) +
-                      "m until sunrise ~" + String(wakeBuf));
+    telegramSendDebug("[NIGHT] sleeping " + String(sleepHours) + "h " + String(sleepMinutes) +
+                      "m until ~" + String(wakeBuf), 1);
 
     esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(sleepSecs) * 1000000ULL);
     esp_deep_sleep_start();
@@ -180,7 +253,7 @@ void setup() {
 
     // WiFi + captive portal (blocking until connected or timeout)
     Serial.println("[WIFI] connecting...");
-    if (!wifiInit()) {
+    if (!wifiConnectWithRetries()) {
         Serial.println("[WIFI] FAILED – sleeping before retry");
         delay(500);
         uint32_t retrySleepSec = otaRecoveryIsArmed()
@@ -189,6 +262,7 @@ void setup() {
         enterDeepSleepSeconds(retrySleepSec);
     }
     WiFi.setSleep(false);
+    netHealthOnBootConnected();
     Serial.println("[WIFI] connected: " + WiFi.localIP().toString());
     otaInit();
 
@@ -217,7 +291,7 @@ void setup() {
                          "Sensors found: " + String(cnt) + "\n"
                          "Parasite power: " + String(tempIsParasitePower() ? "YES" : "NO") + "\n"
                          "Temp: " + (cnt > 0 ? String(t, 1) + " C" : "N/A");
-        telegramSendDebug(diagMsg, 0);
+        telegramSendDebug(diagMsg, 2);
     }
 
     // Process queued commands first (e.g. /maint_on while device was sleeping)
@@ -248,26 +322,25 @@ void setup() {
          Serial.println("[TG] sending welcome...");
          bool ok = telegramSendWelcome();
          Serial.println(ok ? "[TG] welcome sent OK" : "[TG] welcome FAILED");
-         if (!ok) telegramSendDebug("Welcome message send failed");
+         if (!ok) telegramSendDebug("[TG] welcome message send failed", 0);
      }
 
     // Take a photo on startup unless maintenance mode is enabled.
     if (getChatId() && getChatId()[0] != '\0') {
         if (maintMode) {
             Serial.println("[PHOTO] startup capture skipped (maintenance mode)");
-            telegramSendDebug("📸 Startup photo skipped (maintenance mode)", 1);
+            telegramSendDebug("[PHOTO] startup capture skipped (maintenance mode)", 1);
         } else {
             // Ensure no photos are sent in maintenance mode
             if (getChatId() && getChatId()[0] != '\0' && !maintMode) {
                 if (fromSleep) {
                     Serial.println("[PHOTO] starting capture...");
-                    telegramSendDebug("📸 Capturing photo...", 1);
+                    telegramSendDebug("[PHOTO] wakeup capture started", 1);
                     if (!captureAndSendPhoto(getChatId(), true)) {
                         String msg = "[wakeup] Photo capture/send failed.";
                         telegramSend(getChatId(), msg);
-                        telegramSendDebug("📸 Photo send failed", 1);
                     } else {
-                        telegramSendDebug("📸 Photo sent", 1);
+                        telegramSendDebug("[PHOTO] wakeup capture sent", 1);
                     }
                 }
             } else {
@@ -277,7 +350,7 @@ void setup() {
     }
 
     if (fromSleep) {
-        telegramSendDebug("Wakeup cause: timer deep sleep");
+        telegramSendDebug("[BOOT] wakeup cause: timer deep sleep", 2);
     }
 
     // After startup photo and startup queue processing, continue the deep sleep cycle immediately.
@@ -305,6 +378,12 @@ void loop() {
         return;
     }
 
+    // Keep the node reachable on unstable links.
+    if (!wifiRuntimeRecoveryTick()) {
+        delay(20);
+        return;
+    }
+
     // Handle incoming Telegram commands
     telegramLoop();
     mqttLoop();
@@ -321,8 +400,8 @@ void loop() {
             enterDeepSleepSeconds(sleepSec);
         }
 
-        // Deep sleep disabled – take photo inline
-        if (getChatId() && getChatId()[0] != '\0') {
+        // Deep sleep disabled – take photo inline only when maintenance mode is OFF
+        if (getChatId() && getChatId()[0] != '\0' && !telegramIsMaintMode()) {
             captureAndSendPhoto(getChatId(), true);
         }
     }

@@ -35,6 +35,20 @@
   #define WIFI_RESCUE_PORTAL_TIMEOUT 180
 #endif
 
+// Boot/runtime WiFi resilience for unstable links.
+#ifndef WIFI_BOOT_CONNECT_RETRIES
+  #define WIFI_BOOT_CONNECT_RETRIES 3
+#endif
+#ifndef WIFI_BOOT_RETRY_BACKOFF_SEC
+  #define WIFI_BOOT_RETRY_BACKOFF_SEC 5
+#endif
+#ifndef WIFI_RUNTIME_RECONNECT_INTERVAL_SEC
+  #define WIFI_RUNTIME_RECONNECT_INTERVAL_SEC 15
+#endif
+#ifndef WIFI_RUNTIME_REBOOT_AFTER_SEC
+  #define WIFI_RUNTIME_REBOOT_AFTER_SEC 300
+#endif
+
 // --- OTA ---
 #ifndef OTA_HOSTNAME
   #define OTA_HOSTNAME "BirdNestCam"
@@ -92,6 +106,12 @@
 #ifndef CAMERA_WARMUP_FRAMES
   #define CAMERA_WARMUP_FRAMES 2
 #endif
+#ifndef CAMERA_FB_GET_RETRIES
+  #define CAMERA_FB_GET_RETRIES 3
+#endif
+#ifndef CAMERA_FB_GET_RETRY_DELAY_MS
+  #define CAMERA_FB_GET_RETRY_DELAY_MS 120
+#endif
 #ifndef CAMERA_UPLOAD_CHUNK_TIMEOUT_MS
   #define CAMERA_UPLOAD_CHUNK_TIMEOUT_MS 8000
 #endif
@@ -100,16 +120,16 @@
 #endif
 // Image quality adjustments (range -2 to +2; 0 = sensor default)
 #ifndef CAMERA_SATURATION
-  #define CAMERA_SATURATION 1
+  #define CAMERA_SATURATION 0
 #endif
 #ifndef CAMERA_CONTRAST
-  #define CAMERA_CONTRAST 1
+  #define CAMERA_CONTRAST 0
 #endif
 #ifndef CAMERA_BRIGHTNESS
   #define CAMERA_BRIGHTNESS 0
 #endif
 #ifndef CAMERA_SHARPNESS
-  #define CAMERA_SHARPNESS 1
+  #define CAMERA_SHARPNESS 0
 #endif
 // Ambient light register threshold separating night/day mode (0-255)
 #ifndef CAMERA_DAY_THRESHOLD
@@ -150,6 +170,14 @@
 // --- Telegram ---
 #ifndef PHOTO_INTERVAL_SEC
   #define PHOTO_INTERVAL_SEC 300
+#endif
+
+// Photo upload resilience and remote diagnostics.
+#ifndef PHOTO_SEND_MAX_RETRIES
+  #define PHOTO_SEND_MAX_RETRIES 3
+#endif
+#ifndef PHOTO_SEND_RETRY_BACKOFF_MS
+  #define PHOTO_SEND_RETRY_BACKOFF_MS 800
 #endif
 
 // --- MQTT ---
