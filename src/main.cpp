@@ -325,7 +325,8 @@ void setup() {
          if (!ok) telegramSendDebug("[TG] welcome message send failed", 0);
      }
 
-    // Take a photo on startup unless maintenance mode is enabled.
+    // Photo capture is only performed after timer deep-sleep wakeup
+    // (and only when maintenance mode is OFF).
     if (getChatId() && getChatId()[0] != '\0') {
         if (maintMode) {
             Serial.println("[PHOTO] startup capture skipped (maintenance mode)");
@@ -353,7 +354,8 @@ void setup() {
         telegramSendDebug("[BOOT] wakeup cause: timer deep sleep", 2);
     }
 
-    // After startup photo and startup queue processing, continue the deep sleep cycle immediately.
+    // After startup command processing (and optional wakeup photo), continue
+    // the deep sleep cycle immediately.
     // This applies to both first boot and timer wakeups.
     uint32_t sleepSecNow = telegramGetSleepSec();
     if (sleepSecNow > 0 && !telegramIsMaintMode() && !otaIsActive()) {

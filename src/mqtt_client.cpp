@@ -253,6 +253,7 @@ void mqttClearConfig() {
     s_host[0] = '\0';
     s_user[0] = '\0';
     s_pass[0] = '\0';
+    s_topic[0] = '\0';
     s_port = MQTT_DEFAULT_PORT;
     s_hasConfig = false;
 
@@ -262,6 +263,7 @@ void mqttClearConfig() {
     prefs.remove("mqttPort");
     prefs.remove("mqttUser");
     prefs.remove("mqttPass");
+    prefs.remove("mqttTopic");
     prefs.end();
 
     s_mqttClient.disconnect();
