@@ -1,5 +1,45 @@
 # BirdNest ESP32-CAM Project
 
+## Hardware Design Files (KiCad)
+
+The hardware design assets are stored in `hardware/BirdNest_pcb/`.
+
+- Schematic: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_sch`
+- PCB layout: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pcb`
+- KiCad project: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pro`
+- KiCad project local settings: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_prl`
+- Backup folder: `hardware/BirdNest_pcb/BirdNest_pcb-backups/`
+
+### 3D PCB View
+
+![BirdNest PCB 3D view](hardware/BirdNest_pcb/3D%20view.png)
+
+---
+
+## Complete Hardware Pin Mapping (AI-Thinker ESP32-CAM)
+
+| Function | Pin | Notes |
+|---|---|---|
+| XCLK | GPIO0 | 20 MHz camera clock |
+| Camera D0 (Y2) | GPIO5 | Data pin |
+| Camera D1 (Y3) | GPIO18 | Data pin |
+| Camera D2 (Y4) | GPIO19 | Data pin |
+| Camera D3 (Y5) | GPIO21 | Data pin |
+| Camera D4 (Y6) | GPIO36 | Data pin |
+| Camera D5 (Y7) | GPIO39 | Data pin |
+| Camera D6 (Y8) | GPIO34 | Data pin |
+| Camera D7 (Y9) | GPIO35 | Data pin |
+| HREF | GPIO23 | Control line |
+| VSYNC | GPIO25 | Control line |
+| PCLK | GPIO22 | Control line |
+| SDA (I2C) | GPIO26 | Camera I2C data |
+| SCL (I2C) | GPIO27 | Camera I2C clock |
+| OneWire (DS18B20) | GPIO13 | OneWire bus |
+| ADC (Battery) | GPIO12 | Battery voltage measurement |
+| Flash LED | GPIO4 | PWM control |
+
+---
+
 ## Complete Boot Sequence (PHASE 1 in setup())
 
 1. **Serial init** — initialize UART at 115200 baud for debug output
@@ -295,43 +335,4 @@ Availability payload (`availability`) values:
 Example: 2000 mAh battery with 5-min photo interval = 100+ hours of operation
 Night sleep (12 hours OFF) saves 50%+ battery
 
----
-
-## Complete Hardware Pin Mapping (AI-Thinker ESP32-CAM)
-
-| Function | Pin | Notes |
-|---|---|---|
-| XCLK | GPIO0 | 20 MHz camera clock |
-| Camera D0 (Y2) | GPIO5 | Data pin |
-| Camera D1 (Y3) | GPIO18 | Data pin |
-| Camera D2 (Y4) | GPIO19 | Data pin |
-| Camera D3 (Y5) | GPIO21 | Data pin |
-| Camera D4 (Y6) | GPIO36 | Data pin |
-| Camera D5 (Y7) | GPIO39 | Data pin |
-| Camera D6 (Y8) | GPIO34 | Data pin |
-| Camera D7 (Y9) | GPIO35 | Data pin |
-| HREF | GPIO23 | Control line |
-| VSYNC | GPIO25 | Control line |
-| PCLK | GPIO22 | Control line |
-| SDA (I2C) | GPIO26 | Camera I2C data |
-| SCL (I2C) | GPIO27 | Camera I2C clock |
-| OneWire (DS18B20) | GPIO13 | OneWire bus |
-| ADC (Battery) | GPIO12 | Battery voltage measurement |
-| Flash LED | GPIO4 | PWM control |
-
----
-
-## Hardware Design Files (KiCad)
-
-The hardware design assets are stored in `hardware/BirdNest_pcb/`.
-
-- Schematic: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_sch`
-- PCB layout: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pcb`
-- KiCad project: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pro`
-- KiCad project local settings: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_prl`
-- Backup folder: `hardware/BirdNest_pcb/BirdNest_pcb-backups/`
-
-### 3D PCB View
-
-![BirdNest PCB 3D view](hardware/BirdNest_pcb/3D%20view.png)
 
