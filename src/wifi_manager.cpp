@@ -166,7 +166,11 @@ bool wifiInit() {
     wm.addParameter(&paramChat);
     wm.addParameter(&paramDebug);
 
-    bool connected = wm.autoConnect(AP_NAME, AP_PASSWORD);
+    // If Telegram credentials are missing, force AP portal even when WiFi STA
+    // credentials are valid. autoConnect() would otherwise skip the portal.
+    bool connected = missingTelegramFields
+        ? wm.startConfigPortal(AP_NAME, AP_PASSWORD)
+        : wm.autoConnect(AP_NAME, AP_PASSWORD);
 
     if (!connected) {
         if (!failureRecordedThisBoot) {

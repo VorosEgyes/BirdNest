@@ -157,6 +157,10 @@ Common remote error reasons (`cameraGetLastError`):
 ### Battery
 - ADC on GPIO12 with resistor divider formula
 - Two-point calibration math using `bCalA`/`bCalB`
+- GPIO12 is ADC2 on ESP32. While WiFi is connected, ADC2 sampling is not reliable/available, so the firmware returns the last cached valid value.
+- A fresh battery sample is taken during boot before WiFi connect (`batteryRefresh()` in setup), then reused during active WiFi on ADC2 hardware.
+- `/status` reports that cached value on ADC2+WiFi. This is typically the most recent wake-time sample.
+- If `/status` is sent while the device is in deep sleep, it is processed after wake, so battery data in the reply reflects the new measurement from that wake cycle.
 
 ### OTA
 - Startup OTA window: `OTA_STARTUP_WINDOW_SEC` (default 8 s)
@@ -314,4 +318,20 @@ Night sleep (12 hours OFF) saves 50%+ battery
 | OneWire (DS18B20) | GPIO13 | OneWire bus |
 | ADC (Battery) | GPIO12 | Battery voltage measurement |
 | Flash LED | GPIO4 | PWM control |
+
+---
+
+## Hardware Design Files (KiCad)
+
+The hardware design assets are stored in `hardware/BirdNest_pcb/`.
+
+- Schematic: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_sch`
+- PCB layout: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pcb`
+- KiCad project: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_pro`
+- KiCad project local settings: `hardware/BirdNest_pcb/BirdNest_pcb.kicad_prl`
+- Backup folder: `hardware/BirdNest_pcb/BirdNest_pcb-backups/`
+
+### 3D PCB View
+
+![BirdNest PCB 3D view](hardware/BirdNest_pcb/3D%20view.png)
 
