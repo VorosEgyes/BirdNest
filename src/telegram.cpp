@@ -183,6 +183,14 @@ static bool parseMqttSetArgs(const String& text, String& host, uint16_t& port, S
     return true;
 }
 
+static const char* wifiRssiQuality(long rssiDbm) {
+    if (rssiDbm >= -55) return "excellent";
+    if (rssiDbm >= -67) return "good";
+    if (rssiDbm >= -75) return "fair";
+    if (rssiDbm >= -85) return "weak";
+    return "very weak";
+}
+
 // ============================================================
 // Command handler
 // ============================================================
@@ -207,13 +215,21 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         float battRaw = batteryReadRawVoltage();
         float battV = batteryReadVoltage();
         int battPct = batteryReadPercent();
+        const bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+        const long rssi = wifiConnected ? WiFi.RSSI() : 0;
         String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
-        String battStr = String(battV, 2) + " V (" + String(battPct) + "%)";
+        String battStr = String(battV, 2) + " V";
+        String battPctStr = String(battPct) + "%";
+        String rssiStr = wifiConnected
+            ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
+            : String("N/A");
         String calState = batteryIsCalibrationEnabled() ? "ON" : "OFF";
         telegramSend(chatId.c_str(),
             "BirdNest online\nIP: " + WiFi.localIP().toString() +
+            "\nWiFi RSSI: " + rssiStr +
             "\nTemp: " + tempStr +
             "\nBattery: " + battStr +
+            "\nBattery level: " + battPctStr +
             "\nBattery raw: " + String(battRaw, 2) + " V" +
             "\nBattery calibration: " + calState +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
