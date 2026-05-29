@@ -1,5 +1,7 @@
 # BirdNest ESP32-CAM Project
 
+BirdNest is a battery-aware ESP32-CAM wildlife and bird nest monitoring project built with PlatformIO and Arduino. It captures photos on schedule or command, sends images and status updates to Telegram, and supports MQTT telemetry for smart home and IoT integrations. The firmware includes deep sleep power saving, OTA remote updates, WiFi recovery logic, DS18B20 temperature monitoring, and calibrated battery voltage reporting for reliable long-term outdoor operation.
+
 ## Hardware Design Files (KiCad)
 
 The hardware design assets are stored in `hardware/BirdNest_pcb/`.
