@@ -18,7 +18,7 @@
 
 static const uint32_t NIGHT_SLEEP_MAX_SEC = 12UL * 3600UL; // 12-hour safety cap
 static const uint16_t SUNRISE_BUFFER_MIN  = 15U;           // wake 15 min before sunrise
-static const int16_t NIGHT_SLEEP_START_OFFSET_MIN = -60;   // start night sleep 60 min earlier
+static const int16_t NIGHT_SLEEP_START_OFFSET_MIN = 60;    // start night sleep 60 min after sunset
 static const int16_t NIGHT_WAKE_OFFSET_MIN = 30;           // wake 30 min later
 
 struct SunTimes {
