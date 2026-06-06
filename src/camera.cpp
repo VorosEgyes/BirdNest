@@ -34,6 +34,7 @@
 #define FLASH_RES         8
 
 static bool s_flashInited = false;
+static bool s_cameraInitialized = false;
 static String s_lastPhotoError = "none";
 
 static void setLastPhotoError(const String& reason) {
@@ -94,6 +95,10 @@ static void flashOff() {
 // Camera init  (identical settings to the working live project)
 // ============================================================
 bool cameraInit() {
+    if (s_cameraInitialized) {
+        return true;
+    }
+
     camera_config_t cfg;
     cfg.ledc_channel  = LEDC_CHANNEL_0;
     cfg.ledc_timer    = LEDC_TIMER_0;
@@ -293,11 +298,15 @@ bool cameraInit() {
 
     if (fb) esp_camera_fb_return(fb);
 
+    s_cameraInitialized = true;
     return true;
 }
 
 void cameraDeinit() {
+    if (!s_cameraInitialized) return;
+
     esp_camera_deinit();
+    s_cameraInitialized = false;
     // Brief delay so I2C/DMA hardware fully settles before any subsequent init.
     delay(100);
 }
