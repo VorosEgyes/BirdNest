@@ -40,6 +40,10 @@ The hardware design assets are stored in `hardware/BirdNest_pcb/`.
 | ADC (Battery) | GPIO12 | Battery voltage measurement |
 | Flash LED | GPIO4 | PWM control |
 
+## Hardware modification
+
+On the ESP32CAM the AM1117 has been replaced with AP7361C-33ER-13 which consumes less. 
+
 ---
 
 ## Complete Boot Sequence (PHASE 1 in setup())
