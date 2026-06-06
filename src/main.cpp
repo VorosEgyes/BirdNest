@@ -166,7 +166,11 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
         }
     }
 
-    cameraDeinit();
+    // In maintenance mode, keep camera initialized between manual captures
+    // to avoid repeated init/deinit instability on ESP32-CAM modules.
+    if (!telegramIsMaintMode()) {
+        cameraDeinit();
+    }
     Serial.println(ok ? "[PHOTO] sent OK" : "[PHOTO] send FAILED");
     if (!ok) telegramSendDebug("[PHOTO] failed after " + String(maxTries) + " attempts. Last error: " + cameraGetLastError(), 0);
     return ok;
