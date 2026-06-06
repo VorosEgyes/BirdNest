@@ -241,7 +241,10 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         const wl_status_t wifiStatus = WiFi.status();
         const bool connected = (wifiStatus == WL_CONNECTED);
         const String ip = connected ? WiFi.localIP().toString() : "N/A";
-        const String rssi = connected ? String(WiFi.RSSI()) + " dBm" : "N/A";
+        const long rssiDbm = connected ? WiFi.RSSI() : 0;
+        const String rssi = connected
+            ? (String(rssiDbm) + " dBm (" + String(wifiRssiQuality(rssiDbm)) + ")")
+            : String("N/A");
         const unsigned long uptimeSec = millis() / 1000UL;
 
         String msg = "Network diagnostics\n"
@@ -503,6 +506,9 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(), "MQTT channel reset to default: " + mqttGetStatusTopic());
         telegramSendDebug("[MQTT] topic reset by chat " + chatId, 1);
     }
+    else {
+        telegramSend(chatId.c_str(), "Ismeretlen parancs.");
+    }
 }
 
 // ============================================================
@@ -545,20 +551,27 @@ bool telegramSendDebug(const String& message, uint8_t level) {
     if (level > s_debugVerbosity) return true;
     const char* debugChat = getDebugChatId();
     if (!debugChat || debugChat[0] == '\0') return false;
-    return telegramSend(debugChat, "[DEBUG L" + String(level) + "] " + message);
+    return telegramSend(
+        debugChat,
+        "[DEBUG L" + String(level) + "][" + String(CAMERA_LABEL) + "] " + message
+    );
 }
 
 bool telegramSendWelcome() {
-    int32_t rssi = WiFi.RSSI();
+    const bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    int32_t rssi = wifiConnected ? WiFi.RSSI() : 0;
     float temp = tempRead();
     float battRaw = batteryReadRawVoltage();
     float battV = batteryReadVoltage();
     int battPct = batteryReadPercent();
     String tempStr = (temp > -100) ? String(temp, 1) + " °C" : "N/A";
     String battStr = String(battV, 2) + " V (" + String(battPct) + "%)";
+    String rssiStr = wifiConnected
+        ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
+        : String("N/A");
     String msg = "BirdNest camera online!\n"
                  "IP: " + WiFi.localIP().toString() + "\n"
-                 "WiFi RSSI: " + String(rssi) + " dBm\n"
+                 "WiFi RSSI: " + rssiStr + "\n"
                  "Battery: " + battStr + "\n"
                  "Battery raw: " + String(battRaw, 2) + " V\n"
                  "Battery calibration: " + String(batteryIsCalibrationEnabled() ? "ON" : "OFF") + "\n"
