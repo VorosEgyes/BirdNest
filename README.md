@@ -2,6 +2,8 @@
 
 BirdNest is a battery-aware ESP32-CAM wildlife and bird nest monitoring project built with PlatformIO and Arduino. It captures photos on schedule or command, sends images and status updates to Telegram, and supports MQTT telemetry for smart home and IoT integrations. The firmware includes deep sleep power saving, OTA remote updates, WiFi recovery logic, DS18B20 temperature monitoring, and calibrated battery voltage reporting for reliable long-term outdoor operation.
 
+The project now supports a single firmware binary across all cameras. Device-specific identity (label, OTA hostname, AP name) is stored in NVS at runtime and can be changed remotely via Telegram commands.
+
 ## Hardware Design Files (KiCad)
 
 The hardware design assets are stored in `hardware/BirdNest_pcb/`.
@@ -42,7 +44,7 @@ The hardware design assets are stored in `hardware/BirdNest_pcb/`.
 
 ## Hardware modification
 
-On the ESP32CAM the AM1117 has been replaced with AP7361C-33ER-13 which consumes less. 
+On the ESP32CAM the AMS1117 has been replaced with AP7361C-33ER-13 which consumes less. 
 
 ---
 
@@ -80,7 +82,8 @@ On the ESP32CAM the AM1117 has been replaced with AP7361C-33ER-13 which consumes
 
 - 5-second polling interval
 - Update ID persistence every 30 seconds
-- Command table: `/photo`, `/sleepXX`, `/maint_on`, `/maint_off`, `/status`, `/netdiag`, `/reboot`, `/reset_config`, `/debug0|1|2`, `/mirror0|1`, `/flip0|1`, `/battcal`, `/battcalset`, `/battcalclear`, `/mqtt`, `/mqttset`, `/mqtttopic`, `/mqtttopic_reset`, `/mqttoff`
+- Command table: `/status`, `/help`, `/photo`, `/sleepXX`, `/maint_on`, `/maint_off`, `/netdiag`, `/reboot`, `/reboot_ota`, `/setlabel`, `/sethostname`, `/bootstrap_prepare`, `/reset_config`, `/debug0|1|2`, `/mirror0|1`, `/flip0|1`, `/battcal`, `/battcalset`, `/battcalclear`, `/mqtt`, `/mqttset`, `/mqtttopic`, `/mqtttopic_reset`, `/mqttoff`
+- `/status` returns status only; full command listing is in `/help`
 - Callback execution for each command
 
 ---
@@ -155,6 +158,7 @@ On the ESP32CAM the AM1117 has been replaced with AP7361C-33ER-13 which consumes
 - Poll loop every 5 seconds
 - NVS persistence of sleep/maintenance settings
 - `lastMsgId` tracking for message updates
+- `/help` provides the full command list, while `/status` stays focused on runtime state
 
 ### Camera
 - AI-Thinker pin mapping: D0–D7 data, HREF/VSYNC/PCLK control, XCLK 20 MHz

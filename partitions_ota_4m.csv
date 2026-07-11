@@ -1,0 +1,17 @@
+# Partition table for ESP32-CAM (AI-Thinker) with 4 MB flash — dual OTA
+# BirdNest GitHub OTA rollback support
+#
+# Layout:
+#   nvs      : 20 KB  (0x9000 – 0xDFFF)  NVS flash storage
+#   otadata  :  8 KB  (0xE000 – 0xFFFF)  OTA data / bootloader rollback state
+#   ota_0    : ~1.9 MB (0x10000 – 0x1FFFFF)
+#   ota_1    : ~1.9 MB (0x200000 – 0x3EFFFF)
+#   (reserved):  64 KB padding to end of flash
+#
+# Current firmware: ~1.19 MB  — per-slot margin ~700 KB
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+ota_0,    app,  ota_0,   0x10000,  0x1f0000,
+ota_1,    app,  ota_1,   0x200000, 0x1f0000,

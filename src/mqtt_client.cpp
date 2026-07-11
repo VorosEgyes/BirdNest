@@ -4,6 +4,7 @@
 #include "battery.h"
 #include "temperature.h"
 #include "telegram.h"
+#include "wifi_manager.h"
 
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -29,7 +30,7 @@ static String makeTopic(const char* suffix) {
     }
 
     String topic = "birdnest/";
-    topic += CAMERA_LABEL;
+    topic += getDeviceLabel();
     if (suffix && suffix[0] != '\0') {
         topic += "/";
         topic += suffix;
@@ -64,7 +65,7 @@ static void publishEvent(const char* eventType, const char* detail) {
     snprintf(payload, sizeof(payload),
              "{\"schema_version\":%u,\"device\":\"%s\",\"event\":\"%s\",\"detail\":\"%s\",\"uptime_s\":%lu}",
              static_cast<unsigned>(MQTT_SCHEMA_VERSION),
-             CAMERA_LABEL,
+             getDeviceLabel(),
              eventType ? eventType : "unknown",
              detail ? detail : "",
              static_cast<unsigned long>(millis() / 1000UL));
@@ -76,7 +77,7 @@ static void publishEvent(const char* eventType, const char* detail) {
 static String makeClientId() {
     uint64_t chipId = ESP.getEfuseMac();
     uint32_t shortId = static_cast<uint32_t>(chipId & 0xFFFFFFFFUL);
-    return String(CAMERA_LABEL) + "-" + String(shortId, HEX);
+    return String(getDeviceLabel()) + "-" + String(shortId, HEX);
 }
 
 static void loadConfig() {
@@ -188,7 +189,7 @@ void mqttPublishNow(const char* reason) {
     snprintf(payload, sizeof(payload),
              "{\"schema_version\":%u,\"device\":\"%s\",\"reason\":\"%s\",\"ip\":\"%s\",\"rssi\":%ld,\"uptime_s\":%lu,\"temp_c\":%.2f,\"battery_v\":%.3f,\"battery_pct\":%d,\"maint\":%s}",
              static_cast<unsigned>(MQTT_SCHEMA_VERSION),
-             CAMERA_LABEL,
+             getDeviceLabel(),
              reason ? reason : "manual",
              ipStr.c_str(),
              static_cast<long>(rssi),
@@ -311,4 +312,29 @@ String mqttBuildSetupCommand(const String& host, uint16_t port, const String& us
     const String userToken = username.length() > 0 ? username : "-";
     const String passToken = password.length() > 0 ? password : "-";
     return "/mqttset " + host + " " + String(port) + " " + userToken + " " + passToken;
+}
+
+void mqttPublishOtaEvent(const String& eventType,
+                         const String& reason,
+                         const String& targetVersion,
+                         const String& channel) {
+    if (!s_hasConfig) return;
+    if (!ensureConnected()) return;
+
+    const String topic = getEventTopic();
+    char payload[512];
+    snprintf(payload, sizeof(payload),
+             "{\"schema_version\":%u,\"device\":\"%s\",\"event\":\"%s\","
+             "\"reason\":\"%s\",\"current_version\":\"%s\","
+             "\"target_version\":\"%s\",\"channel\":\"%s\",\"uptime_s\":%lu}",
+             static_cast<unsigned>(MQTT_SCHEMA_VERSION),
+             getDeviceLabel(),
+             eventType.length() ? eventType.c_str() : "unknown",
+             reason.length() ? reason.c_str() : "",
+             FW_VERSION,
+             targetVersion.length() ? targetVersion.c_str() : "",
+             channel.length() ? channel.c_str() : "",
+             static_cast<unsigned long>(millis() / 1000UL));
+
+    s_mqttClient.publish(topic.c_str(), payload, false);
 }

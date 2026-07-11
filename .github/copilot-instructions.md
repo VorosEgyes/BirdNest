@@ -117,8 +117,13 @@ pio run -e cam1 -t upload --upload-port /dev/cu.usbserial-XXXX
 ```
 
 ## Network context
-- MQTT broker: 192.168.0.196:1883, no auth, IoT VLAN (Pres-iot)
-- OpenHAB on the same NAS consumes the MQTT status/event/availability topics
+- MQTT broker host/port/auth for this camera are runtime-configured via
+  `/mqttset` and stored in NVS (`mqttHost`, `mqttPort`, `mqttUser`, `mqttPass`)
+  — not a build-time constant. Don't hardcode a broker address in suggestions;
+  point to the `/mqttset` command instead.
+- If OpenHAB or another subscriber consumes these topics, confirm the actual
+  broker address/VLAN reachability for this specific device before assuming
+  it matches other projects' MQTT config.
 
 ## What NOT to suggest
 - Don't suggest reading ADC2 (GPIO12) live while WiFi is connected — see

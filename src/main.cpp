@@ -9,6 +9,7 @@
 #include "telegram.h"
 #include "camera.h"
 #include "ota.h"
+#include "gh_ota.h"
 #include "temperature.h"
 #include "battery.h"
 #include "sun_times.h"
@@ -275,6 +276,24 @@ void setup() {
     // Without this window, loop() may never run if sleepSec > 0.
     if (!otaStartupWindow(batteryVoltage)) {
         enterDeepSleepSeconds(otaGetRecoverySleepSeconds(batteryVoltage));
+    }
+
+    // GitHub OTA: init module, confirm post-install rollback health if needed,
+    // then run auto-check/install when enabled.
+    // Placed after the ArduinoOTA startup window to let the UDP/mDNS stack settle.
+    ghOtaInit();
+    ghOtaConfirmHealthIfPending();
+    if (ghOtaIsAutoEnabled() && !telegramIsMaintMode()) {
+        GhOtaTarget pendingTarget;
+        if (ghOtaGetPendingTarget(pendingTarget)) {
+            ghOtaInstall(pendingTarget);
+        } else {
+            GhOtaTarget target;
+            const GhOtaCheck check = ghOtaCheckForUpdate(target, false);
+            if (check == GhOtaCheck::UpdateAvailable) {
+                ghOtaInstall(target);
+            }
+        }
     }
 
     syncTimeIfNeeded();

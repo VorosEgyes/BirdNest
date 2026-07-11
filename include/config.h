@@ -6,6 +6,8 @@
 // of truth; these values are only used if a flag is missing.
 // ============================================================
 
+#include "fw_version_auto.h"
+
 // --- WiFi captive portal ---
 #ifndef AP_NAME
   #define AP_NAME "BirdNestCam"
@@ -79,6 +81,35 @@
 #endif
 #ifndef OTA_RECOVERY_MIN_BATTERY_V
   #define OTA_RECOVERY_MIN_BATTERY_V 3.70f
+#endif
+#ifndef BOOTSTRAP_MIN_BATTERY_V
+  #define BOOTSTRAP_MIN_BATTERY_V 3.80f
+#endif
+#ifndef BOOTSTRAP_MIN_RSSI_DBM
+  #define BOOTSTRAP_MIN_RSSI_DBM -82
+#endif
+
+// --- GitHub OTA ---
+#ifndef OTA_GH_OWNER
+  #define OTA_GH_OWNER "your-github-user"
+#endif
+#ifndef OTA_GH_REPO
+  #define OTA_GH_REPO "00BirdNest_26_1"
+#endif
+#ifndef OTA_GH_API_HOST
+  #define OTA_GH_API_HOST "api.github.com"
+#endif
+#ifndef GH_OTA_WIFI_STABLE_RSSI_MIN
+  #define GH_OTA_WIFI_STABLE_RSSI_MIN -85
+#endif
+#ifndef GH_OTA_MAX_CHECK_ATTEMPTS
+  #define GH_OTA_MAX_CHECK_ATTEMPTS 4
+#endif
+#ifndef GH_OTA_CHECK_RETRY_DELAY_MS
+  #define GH_OTA_CHECK_RETRY_DELAY_MS 1500
+#endif
+#ifndef GH_OTA_HTTP_TIMEOUT_MS
+  #define GH_OTA_HTTP_TIMEOUT_MS 12000
 #endif
 
 // --- Hardware ---

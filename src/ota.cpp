@@ -1,6 +1,7 @@
 #include "ota.h"
 #include "config.h"
 #include "telegram.h"
+#include "wifi_manager.h"
 
 #include <ArduinoOTA.h>
 #include <Arduino.h>
@@ -85,7 +86,7 @@ unsigned long otaGetRecoverySleepSeconds(float batteryVoltage) {
 void otaInit() {
     loadRecoveryState();
 
-    ArduinoOTA.setHostname(OTA_HOSTNAME);
+    ArduinoOTA.setHostname(getOtaHostname());
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.setTimeout(OTA_TIMEOUT_MS);
 

@@ -20,5 +20,12 @@ const char* getBotToken();
 const char* getChatId();
 const char* getDebugChatId();
 
+// Runtime device identity (persisted in NVS, shared single firmware binary).
+const char* getDeviceLabel();
+const char* getOtaHostname();
+const char* getApName();
+bool setDeviceLabel(const String& label);
+bool setOtaHostname(const String& hostname);
+
 // Reset WiFi settings (clears saved credentials) and reboot
 void wifiReset();

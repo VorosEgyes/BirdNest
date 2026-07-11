@@ -4,6 +4,7 @@
 #include "temperature.h"
 #include "battery.h"
 #include "ota.h"
+#include "gh_ota.h"
 #include "mqtt_client.h"
 #include "net_health.h"
 
@@ -12,6 +13,7 @@
 #include <UniversalTelegramBot.h>
 #include <Arduino.h>
 #include <Preferences.h>
+#include <esp_ota_ops.h>
 
 // static objects, not pointers, token set at construct time.
 static WiFiClientSecure s_client;
@@ -191,6 +193,63 @@ static const char* wifiRssiQuality(long rssiDbm) {
     return "very weak";
 }
 
+static String buildBootstrapPreflightReport(bool& allOk) {
+    const float batteryV = batteryReadVoltage();
+    const bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    const long rssi = wifiConnected ? WiFi.RSSI() : -127;
+    const bool batteryOk = batteryV >= BOOTSTRAP_MIN_BATTERY_V;
+    const bool rssiOk = wifiConnected && rssi >= BOOTSTRAP_MIN_RSSI_DBM;
+    const bool telegramOk = getBotToken() && getBotToken()[0] != '\0' &&
+                            getChatId() && getChatId()[0] != '\0' &&
+                            getDebugChatId() && getDebugChatId()[0] != '\0';
+    const bool otaPartitionOk = esp_ota_get_next_update_partition(nullptr) != nullptr;
+
+    allOk = batteryOk && rssiOk && telegramOk && otaPartitionOk;
+
+    String report = "Bootstrap preflight:\n";
+    report += "battery: " + String(batteryV, 2) + "V (min " + String(BOOTSTRAP_MIN_BATTERY_V, 2) + ") -> " + (batteryOk ? "OK" : "FAIL") + "\n";
+    report += "wifi: " + String(wifiConnected ? "CONNECTED" : "DISCONNECTED") + " -> " + (wifiConnected ? "OK" : "FAIL") + "\n";
+    report += "rssi: " + String(rssi) + " dBm (min " + String(BOOTSTRAP_MIN_RSSI_DBM) + ") -> " + (rssiOk ? "OK" : "FAIL") + "\n";
+    report += "telegram creds: " + String(telegramOk ? "OK" : "FAIL") + "\n";
+    report += "ota partition: " + String(otaPartitionOk ? "OK" : "FAIL");
+    return report;
+}
+
+static String buildHelpMessage() {
+    return "Available commands:\n"
+           "/status - show status\n"
+           "/help - show this command list\n"
+           "/photo - take a photo now\n"
+           "/netdiag - show network diagnostics\n"
+           "/reboot - reboot now\n"
+           "/reboot_ota - arm OTA recovery, then reboot\n"
+           "/maint_on - maintenance mode ON (deep sleep suppressed)\n"
+           "/maint_off - maintenance mode OFF\n"
+           "/sleepXX - deep sleep interval in minutes (00 = off)\n"
+           "/setlabel <name> - set runtime device label\n"
+           "/sethostname <name> - set runtime OTA hostname\n"
+           "/bootstrap_prepare - prep and preflight for first remote install\n"
+           "/mirror0|1 - camera mirror OFF/ON\n"
+           "/flip0|1 - camera vertical flip OFF/ON\n"
+           "/mqtt - show MQTT config and one-message setup command\n"
+           "/mqttset h p u pw - set MQTT host/port/auth in one message\n"
+           "/mqtttopic t - set MQTT publish channel/topic\n"
+           "/mqtttopic_reset - reset MQTT topic to default\n"
+           "/mqttoff - disable MQTT\n"
+           "/battcal - show battery calibration\n"
+           "/battcalset r1 m1 r2 m2 - set two-point battery calibration\n"
+           "/battcalclear - clear battery calibration\n"
+           "/reset_config - erase WiFi and stored credentials\n"
+           "/debug0|1|2 - debug verbosity (minimal/normal/verbose)\n"
+           "/otastatus - GitHub OTA status JSON\n"
+           "/otaupdate_check - check for new release\n"
+           "/otaupdate_now - check and install immediately\n"
+           "/otaupdate_auto_on | /otaupdate_auto_off - auto-update toggle\n"
+           "/otachannel stable|beta\n"
+           "/otatoken_set <token> - set GitHub token (private repos)\n"
+           "/otatoken_clear";
+}
+
 // ============================================================
 // Command handler
 // ============================================================
@@ -211,6 +270,10 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     if (!fromMain && !fromDebug) return;
 
     if (text == "/start" || text == "/status") {
+        if (text == "/start") {
+            telegramSend(chatId.c_str(), "BirdNest bot is online. Send /status for state and /help for commands.");
+        }
+
         float temp = tempRead();
         float battRaw = batteryReadRawVoltage();
         float battV = batteryReadVoltage();
@@ -224,18 +287,30 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
             : String("N/A");
         String calState = batteryIsCalibrationEnabled() ? "ON" : "OFF";
+        String deviceLabel = String(getDeviceLabel());
+        String otaHost = String(getOtaHostname());
         telegramSend(chatId.c_str(),
-            "BirdNest online\nIP: " + WiFi.localIP().toString() +
+            "BirdNest online\nDevice: " + deviceLabel +
+            "\nIP: " + WiFi.localIP().toString() +
             "\nWiFi RSSI: " + rssiStr +
             "\nTemp: " + tempStr +
             "\nBattery: " + battStr +
             "\nBattery level: " + battPctStr +
             "\nBattery raw: " + String(battRaw, 2) + " V" +
             "\nBattery calibration: " + calState +
+            "\nOTA hostname: " + otaHost +
+            "\nFW version: " + String(FW_VERSION) +
+            "\nGitHub OTA: " + String(ghOtaIsAutoEnabled() ? "AUTO" : "MANUAL") +
+            " / " + ghOtaGetChannel() +
+            " / token=" + String(ghOtaHasToken() ? "SET" : "EMPTY") +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
             "\nOTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") +
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
-            "\nFlip: " + (s_camFlip ? "ON" : "OFF"));
+            "\nFlip: " + (s_camFlip ? "ON" : "OFF") +
+            "\n\nTip: send /help for commands.");
+    }
+    else if (text == "/help") {
+        telegramSend(chatId.c_str(), buildHelpMessage());
     }
     else if (text == "/netdiag") {
         const wl_status_t wifiStatus = WiFi.status();
@@ -290,7 +365,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             return;
         }
         telegramSend(chatId.c_str(),
-            "Resetting config. Connect to AP \"" AP_NAME "\" to reconfigure.");
+            "Resetting config. Connect to AP \"" + String(getApName()) + "\" to reconfigure.");
         telegramSendDebug("[CMD] executing /reset_config requested by chat " + chatId, 0);
         delay(1000);
         wifiReset();
@@ -322,6 +397,58 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             telegramSend(chatId.c_str(),
                 "Usage: /sleepXX where XX is 00-99 minutes (00 = off).");
         }
+    }
+    else if (text.startsWith("/setlabel ")) {
+        String label = text.substring(String("/setlabel ").length());
+        label.trim();
+        if (!setDeviceLabel(label)) {
+            telegramSend(chatId.c_str(), "Usage: /setlabel <name> (1..40 printable chars)");
+            return;
+        }
+
+        telegramSend(chatId.c_str(),
+            "Device label saved: " + String(getDeviceLabel()) +
+            "\nAP name now: " + String(getApName()) +
+            "\nMQTT default topics will use the new label.");
+        telegramSendDebug("[CMD] runtime device label changed to " + String(getDeviceLabel()) + " by chat " + chatId, 1);
+    }
+    else if (text.startsWith("/sethostname ")) {
+        String host = text.substring(String("/sethostname ").length());
+        host.trim();
+        if (!setOtaHostname(host)) {
+            telegramSend(chatId.c_str(), "Usage: /sethostname <name> (letters/numbers/hyphen)");
+            return;
+        }
+
+        telegramSend(chatId.c_str(),
+            "OTA hostname saved: " + String(getOtaHostname()) +
+            "\nReboot required to apply ArduinoOTA hostname.");
+        telegramSendDebug("[CMD] runtime OTA hostname changed to " + String(getOtaHostname()) + " by chat " + chatId, 1);
+    }
+    else if (text == "/bootstrap_prepare") {
+        s_maintMode = true;
+        s_sleepSec = 0;
+        saveRuntimeConfig();
+        WiFi.setSleep(false);
+        otaArmRecovery();
+
+        bool preflightOk = false;
+        const String preflight = buildBootstrapPreflightReport(preflightOk);
+
+        String msgOut = "Bootstrap mode armed:\n"
+                        "- maintenance=ON\n"
+                        "- sleep=OFF\n"
+                        "- wifi modem sleep=OFF\n"
+                        "- ota recovery=ARMED\n\n" + preflight;
+
+        if (preflightOk) {
+            msgOut += "\n\nREADY: first remote install can be started.";
+        } else {
+            msgOut += "\n\nNOT READY: fix failed checks before first remote install.";
+        }
+
+        telegramSend(chatId.c_str(), msgOut);
+        telegramSendDebug("[CMD] bootstrap_prepare executed by chat " + chatId + ", ready=" + String(preflightOk ? "yes" : "no"), 0);
     }
     else if (text == "/debug0" || text == "/debug1" || text == "/debug2") {
         uint8_t level = static_cast<uint8_t>(text.charAt(6) - '0');
@@ -416,6 +543,17 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         delay(500);
         ESP.restart();
     }
+    else if (text == "/reboot_ota") {
+        if (!allowResetConfig) {
+            telegramSendDebug("[CMD] skipped stale /reboot_ota from startup queue", 2);
+            return;
+        }
+        otaArmRecovery();
+        telegramSend(chatId.c_str(), "OTA recovery armed. Rebooting now.");
+        telegramSendDebug("[CMD] /reboot_ota requested by chat " + chatId, 0);
+        delay(500);
+        ESP.restart();
+    }
     else if (text == "/mqtt") {
         String host;
         String user;
@@ -506,8 +644,92 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(), "MQTT channel reset to default: " + mqttGetStatusTopic());
         telegramSendDebug("[MQTT] topic reset by chat " + chatId, 1);
     }
+    else if (text == "/otastatus") {
+        telegramSend(chatId.c_str(), "OTA status:\n" + ghOtaStatusJson());
+    }
+    else if (text == "/otaupdate_auto_on") {
+        ghOtaSetAutoEnabled(true);
+        telegramSend(chatId.c_str(), "GitHub OTA auto-update is now ON.");
+    }
+    else if (text == "/otaupdate_auto_off") {
+        ghOtaSetAutoEnabled(false);
+        telegramSend(chatId.c_str(), "GitHub OTA auto-update is now OFF.");
+    }
+    else if (text.startsWith("/otachannel")) {
+        String arg = text.substring(String("/otachannel").length());
+        arg.trim(); arg.toLowerCase();
+        if (!ghOtaSetChannel(arg)) {
+            telegramSend(chatId.c_str(), "Usage: /otachannel stable|beta");
+            return;
+        }
+        telegramSend(chatId.c_str(), "OTA channel set to: " + ghOtaGetChannel());
+    }
+    else if (text == "/otaupdate_check" || text == "/otaupdate_now") {
+        if (!allowResetConfig) {
+            telegramSendDebug("[CMD] skipped stale " + text + " from startup queue", 1);
+            return;
+        }
+        const bool isNow = (text == "/otaupdate_now");
+        telegramSend(chatId.c_str(),
+            isNow ? "OTA check+install started. May take ~20 s..."
+                  : "OTA check started. May take ~20 s...");
+
+        // Lazy init: safe to call here because Telegram commands arrive after
+        // the ArduinoOTA startup window has long settled.
+        ghOtaInit();
+
+        GhOtaTarget target;
+        const GhOtaCheck check = ghOtaCheckForUpdate(target, true);
+        if (check == GhOtaCheck::NoUpdate) {
+            telegramSend(chatId.c_str(), "OTA check done: no newer release found."); return;
+        }
+        if (check == GhOtaCheck::Skipped) {
+            telegramSend(chatId.c_str(), "OTA check skipped (network/time gate)."); return;
+        }
+        if (check == GhOtaCheck::Error) {
+            telegramSend(chatId.c_str(), "OTA check failed. See debug chat."); return;
+        }
+        telegramSend(chatId.c_str(),
+            "Update available: " + target.version +
+            " (channel=" + target.channel +
+            " min_batt=" + String(target.minBatteryV, 2) + "V)");
+        if (isNow) {
+            const bool ok = ghOtaInstall(target, true);
+            if (!ok) {
+                const String reason = ghOtaGetPendingReason();
+                telegramSend(chatId.c_str(),
+                    "Install not started. reason=" + (reason.isEmpty() ? "unknown" : reason) +
+                    "\nCheck /otastatus and debug chat.");
+            }
+        }
+    }
+    else if (text.startsWith("/otatoken_set ")) {
+        String token = text.substring(String("/otatoken_set ").length());
+        token.trim();
+        if (!ghOtaSetToken(token)) {
+            telegramSend(chatId.c_str(), "Token save failed. Usage: /otatoken_set <token>");
+            return;
+        }
+        // Attempt to delete the message to avoid token exposure in chat history.
+        if (s_bot && msg.message_id > 0) {
+            StaticJsonDocument<128> payload;
+            payload["chat_id"] = chatId;
+            payload["message_id"] = msg.message_id;
+            s_bot->sendPostToTelegram("deleteMessage", payload.as<JsonObject>());
+        }
+        const String masked = token.length() >= 4 ? token.substring(token.length() - 4) : token;
+        telegramSend(chatId.c_str(), "Token saved. Mask: ..." + masked);
+    }
+    else if (text == "/otatoken_clear") {
+        bool droppedPending = false;
+        ghOtaClearToken(&droppedPending);
+        telegramSend(chatId.c_str(),
+            droppedPending
+                ? "Token cleared. Pending private OTA target dropped; run /otaupdate_check again."
+                : "Token cleared.");
+    }
     else {
-        telegramSend(chatId.c_str(), "Ismeretlen parancs.");
+        telegramSend(chatId.c_str(), "Unknown command: " + text + "\nSend /status for status or /help for commands.");
     }
 }
 
@@ -553,7 +775,7 @@ bool telegramSendDebug(const String& message, uint8_t level) {
     if (!debugChat || debugChat[0] == '\0') return false;
     return telegramSend(
         debugChat,
-        "[DEBUG L" + String(level) + "][" + String(CAMERA_LABEL) + "] " + message
+        "[DEBUG L" + String(level) + "][" + String(getDeviceLabel()) + "] " + message
     );
 }
 
@@ -570,13 +792,16 @@ bool telegramSendWelcome() {
         ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
         : String("N/A");
     String msg = "BirdNest camera online!\n"
+                 "Device: " + String(getDeviceLabel()) + "\n"
                  "IP: " + WiFi.localIP().toString() + "\n"
                  "WiFi RSSI: " + rssiStr + "\n"
                  "Battery: " + battStr + "\n"
                  "Battery raw: " + String(battRaw, 2) + " V\n"
                  "Battery calibration: " + String(batteryIsCalibrationEnabled() ? "ON" : "OFF") + "\n"
-                 "Temp: " + tempStr + "\n\n"
-                 "NVS runtime config:\n"
+                 "Temp: " + tempStr + "\n\n"                 "FW version: " + String(FW_VERSION) + "\n"
+                 "GitHub OTA: " + String(ghOtaIsAutoEnabled() ? "AUTO" : "MANUAL") +
+                 " / " + ghOtaGetChannel() +
+                 " / token=" + String(ghOtaHasToken() ? "SET" : "EMPTY") + "\n"                 "NVS runtime config:\n"
                  "Sleep: " + String(s_sleepSec / 60) + " min\n"
                  "Maintenance: " + String(s_maintMode ? "ON" : "OFF") + "\n"
                  "OTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") + "\n"
@@ -584,26 +809,7 @@ bool telegramSendWelcome() {
                  "Camera mirror: " + String(s_camMirror ? "ON" : "OFF") + "\n"
                  "Camera flip: " + String(s_camFlip ? "ON" : "OFF") + "\n"
                  "Last message ID: " + String(s_lastMessageId) + "\n\n"
-                 "Commands:\n"
-                 "/photo – take a photo now\n"
-                 "/status – show status\n"
-                 "/netdiag – show network diagnostics\n"
-                 "/reboot – reboot now\n"
-                 "/maint_on – maintenance mode ON (deep sleep suppressed)\n"
-                 "/maint_off – maintenance mode OFF\n"
-                 "/sleepXX – deep sleep interval in minutes (00 = off)\n"
-                 "/mirror0|1 – camera mirror OFF/ON\n"
-                 "/flip0|1 – camera vertical flip OFF/ON\n"
-                 "/mqtt – show MQTT config and one-message setup command\n"
-                 "/mqttset h p u pw – set MQTT host/port/auth in one message\n"
-                 "/mqtttopic t – set MQTT publish channel/topic\n"
-                 "/mqtttopic_reset – reset MQTT topic to default\n"
-                 "/mqttoff – disable MQTT\n"
-                 "/battcal – show battery calibration\n"
-                 "/battcalset r1 m1 r2 m2 – set two-point battery calibration\n"
-                 "/battcalclear – clear battery calibration\n"
-                 "/reset_config – erase WiFi and stored credentials\n"
-                 "/debug0|1|2 – debug verbosity (minimal/normal/verbose)";
+                 "Send /help for command list.";
     bool ok = telegramSend(getChatId(), msg);
     if (ok) {
         telegramSendDebug("[BOOT] welcome/status message sent to main chat", 2);

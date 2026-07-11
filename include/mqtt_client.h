@@ -14,6 +14,12 @@ void mqttLoop();
 // Publish one status packet immediately (if connected/configured).
 void mqttPublishNow(const char* reason = "manual");
 
+// Publish a structured GitHub OTA event (version, reason, channel).
+void mqttPublishOtaEvent(const String& eventType,
+                         const String& reason,
+                         const String& targetVersion,
+                         const String& channel);
+
 // MQTT runtime config management.
 bool mqttHasConfig();
 bool mqttSetConfig(const String& host, uint16_t port, const String& username, const String& password);

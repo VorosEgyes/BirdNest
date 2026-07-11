@@ -380,7 +380,7 @@ bool cameraSendPhoto(const char* chatId) {
         String(chatId) + "\r\n"
         "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" +
-        String("Cam: ") + String(CAMERA_LABEL) + "\r\n"
+        String("Cam: ") + String(getDeviceLabel()) + "\r\n"
         "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"photo\"; filename=\"nest.jpg\"\r\n"
         "Content-Type: image/jpeg\r\n\r\n";
