@@ -2,7 +2,9 @@
 
 BirdNest is a battery-aware ESP32-CAM wildlife and bird nest monitoring project built with PlatformIO and Arduino. It captures photos on schedule or command, sends images and status updates to Telegram, and supports MQTT telemetry for smart home and IoT integrations. The firmware includes deep sleep power saving, OTA remote updates, WiFi recovery logic, DS18B20 temperature monitoring, and calibrated battery voltage reporting for reliable long-term outdoor operation.
 
-The project now supports a single firmware binary across all cameras. Device-specific identity (label, OTA hostname, AP name) is stored in NVS at runtime and can be changed remotely via Telegram commands.
+**Single firmware binary model.** All cameras share one firmware build. Device-specific identity (label, OTA hostname, AP name) is stored in NVS at runtime, with a MAC-address-based fallback for first boot. Identity can be changed remotely via Telegram commands without reflashing.
+
+**GitHub OTA.** Starting from v0.1.0, firmware releases are published to GitHub automatically via CI. Each device can check for and install updates over HTTPS, with SHA-256 verification and optional A/B rollback. Updates are controlled via Telegram commands at runtime.
 
 ## Hardware Design Files (KiCad)
 
@@ -54,7 +56,8 @@ On the ESP32CAM the AMS1117 has been replaced with AP7361C-33ER-13 which consume
 2. **tempInit()** — DS18B20 on GPIO13 OneWire bus with internal pull-up
 3. **batteryInit()** — GPIO12 ADC setup for battery voltage reading
 4. **WiFi connect phase** — STA connect with boot retries; rescue captive portal on repeated failures; deep-sleep fallback when boot connectivity cannot be recovered
-5. **otaInit()** and startup OTA window — check for OTA updates (`OTA_STARTUP_WINDOW_SEC`, or `OTA_RECOVERY_WINDOW_SEC` when recovery is armed)
+5. **otaInit()** and startup OTA window — check for ArduinoOTA updates (`OTA_STARTUP_WINDOW_SEC`, or `OTA_RECOVERY_WINDOW_SEC` when recovery is armed)
+5b. **ghOtaInit()** — initialize GitHub OTA module after the ArduinoOTA window settles; confirm post-install rollback health if `ESP_OTA_IMG_PENDING_VERIFY`; run auto-check and install if `otaAuto=true`
 6. **syncTimeIfNeeded()** — NTP sync with up to 30 retries, 200ms between each
 7. **telegramInit()** and startup message processing — initialize Telegram bot and handle first message
 8. **nightSleepIfNeeded()** — if after sunset, sleep until sunrise using week-number lookup table
@@ -82,7 +85,7 @@ On the ESP32CAM the AMS1117 has been replaced with AP7361C-33ER-13 which consume
 
 - 5-second polling interval
 - Update ID persistence every 30 seconds
-- Command table: `/status`, `/help`, `/photo`, `/sleepXX`, `/maint_on`, `/maint_off`, `/netdiag`, `/reboot`, `/reboot_ota`, `/setlabel`, `/sethostname`, `/bootstrap_prepare`, `/reset_config`, `/debug0|1|2`, `/mirror0|1`, `/flip0|1`, `/battcal`, `/battcalset`, `/battcalclear`, `/mqtt`, `/mqttset`, `/mqtttopic`, `/mqtttopic_reset`, `/mqttoff`
+- Command table: `/status`, `/help`, `/photo`, `/sleepXX`, `/maint_on`, `/maint_off`, `/netdiag`, `/reboot`, `/reboot_ota`, `/setlabel`, `/sethostname`, `/bootstrap_prepare`, `/reset_config`, `/debug0|1|2`, `/mirror0|1`, `/flip0|1`, `/battcal`, `/battcalset`, `/battcalclear`, `/mqtt`, `/mqttset`, `/mqtttopic`, `/mqtttopic_reset`, `/mqttoff`, `/otastatus`, `/otaupdate_check`, `/otaupdate_now`, `/otaupdate_auto_on`, `/otaupdate_auto_off`, `/otachannel`, `/otatoken_set`, `/otatoken_clear`
 - `/status` returns status only; full command listing is in `/help`
 - Callback execution for each command
 
@@ -212,12 +215,130 @@ Common remote error reasons (`cameraGetLastError`):
 - `/status` reports that cached value on ADC2+WiFi. This is typically the most recent wake-time sample.
 - If `/status` is sent while the device is in deep sleep, it is processed after wake, so battery data in the reply reflects the new measurement from that wake cycle.
 
-### OTA
+### Runtime Device Identity
+
+All cameras run the same firmware binary. Each device's identity is stored in NVS and loaded at every boot.
+
+| NVS key | Default | Description |
+|---|---|---|
+| `devLabel` | `BirdNest-XXXXXXXX` (MAC) | Human-readable device name |
+| `otaHost` | `birdnest-xxxxxxxx` (MAC) | ArduinoOTA mDNS hostname |
+| AP name | derived from `devLabel` + `-cfg` | Captive portal AP name (not stored separately) |
+
+On first boot the label and hostname are generated from the lower 32 bits of the chip MAC address, so multiple devices with the same factory firmware never collide on the same LAN.
+
+Telegram commands:
+- `/setlabel <name>` — change device label (persisted in NVS, affects MQTT topics and photo captions)
+- `/sethostname <name>` — change ArduinoOTA hostname (reboot required to apply mDNS)
+- `/status` and welcome message show current label and OTA hostname
+
+---
+
+### ArduinoOTA (local network upload)
 - Startup OTA window: `OTA_STARTUP_WINDOW_SEC` (default 8 s)
 - Extended recovery window: `OTA_RECOVERY_WINDOW_SEC` (default 120 s) when recovery latch is armed
 - OTA stall watchdog: restart if transfer is idle for `OTA_STALL_TIMEOUT_SEC`
 - Recovery sleep policy: `OTA_RECOVERY_SLEEP_SEC`, with low-battery fallback `OTA_RECOVERY_LOW_BATTERY_SLEEP_SEC` below `OTA_RECOVERY_MIN_BATTERY_V`
 - Recovery state is persisted in NVS via `otaArmed` and `otaCycles`
+- `/reboot_ota` arms recovery and reboots — opens an extended OTA window for PlatformIO upload
+
+---
+
+### GitHub OTA (automatic over-the-internet updates)
+
+Starting from v0.1.0, every `v*` git tag triggers a CI build that publishes a single firmware binary and `ota-manifest.json` to GitHub Releases. Devices can check and install these releases over HTTPS without physical access.
+
+#### How it works
+
+1. **Check**: device queries `api.github.com/repos/VorosEgyes/BirdNest/releases`, finds the best candidate by SemVer and channel (stable/beta), downloads `ota-manifest.json`.
+2. **Install gate**: battery ≥ max(3.60 V, `manifest.min_battery_v`), WiFi stable.
+3. **Install**: streams the `.bin` via HTTPS, verifies SHA-256 incrementally, writes to the inactive OTA partition, reboots.
+4. **Health confirm**: on first boot after install, pings `api.github.com/rate_limit` up to 3 times; if any succeed, marks the image valid and cancels rollback.
+
+#### Partition table requirement
+
+GitHub OTA install requires an A/B OTA partition layout (`partitions_ota_4m.csv`). Devices previously flashed with `min_spiffs.csv` (single app partition) will run all GitHub OTA code normally but **install will be blocked** with reason `no_update_partition` until the device receives a full flash.
+
+| Scenario | ArduinoOTA upload | GitHub OTA install |
+|---|---|---|
+| Device with `partitions_ota_4m.csv` | ✅ | ✅ |
+| Device with `min_spiffs.csv` (old layout) | ✅ | ❌ blocked |
+
+#### First-install / partition migration guide
+
+To migrate an existing camera from `min_spiffs` to OTA partitions:
+
+1. Connect via USB.
+2. Run a full flash (includes partition table + bootloader + firmware):
+   ```bash
+   pio run -e cam1 -t upload --upload-port /dev/cu.usbserial-XXXX
+   # or cam2, cam3, cam4 — all envs produce the same binary
+   ```
+3. After this one-time flash, all future updates can be done via GitHub OTA with no physical access.
+
+For cameras only reachable via ArduinoOTA, use `/bootstrap_prepare` before the USB flash session to ensure maintenance mode is on and sleep is off.
+
+#### Bootstrap preflight command
+
+`/bootstrap_prepare` — run this before any first-install or partition migration session:
+- Sets maintenance mode ON (suppresses deep sleep)
+- Sets sleep interval to 0
+- Disables WiFi modem sleep
+- Arms ArduinoOTA recovery
+- Runs and reports a preflight check:
+  - Battery ≥ `BOOTSTRAP_MIN_BATTERY_V` (default 3.80 V)
+  - WiFi connected and RSSI ≥ `BOOTSTRAP_MIN_RSSI_DBM` (default −82 dBm)
+  - Telegram credentials present
+  - OTA update partition reachable
+
+Reports `READY` or `NOT READY` with per-check detail.
+
+#### GitHub OTA Telegram commands
+
+| Command | Description |
+|---|---|
+| `/otastatus` | JSON status: current version, channel, auto mode, pending target, last reason |
+| `/otaupdate_check` | Query GitHub releases; report available version or no-update |
+| `/otaupdate_now` | Check and immediately install if update found |
+| `/otaupdate_auto_on` | Enable automatic check+install on every boot |
+| `/otaupdate_auto_off` | Disable automatic updates (manual only) |
+| `/otachannel stable\|beta` | Switch release channel |
+| `/otatoken_set <token>` | Set GitHub API token (private repos; message auto-deleted) |
+| `/otatoken_clear` | Clear token; drops pending private target |
+
+#### Versioning and CI release workflow
+
+- `FW_VERSION` is injected at build time from the nearest git tag via `scripts/fw_version_from_git.py`.
+- Local/untagged builds use `0.0.0-dev` as fallback.
+- CI (`release-ota.yml`) triggers on any `v*` tag push:
+  - Builds `[env:release]` (same binary as camX envs)
+  - Calculates SHA-256
+  - Uploads `birdnest-esp32cam-vX.Y.Z.bin` and `ota-manifest.json` to GitHub Releases
+- Devices on stable channel only see non-prerelease tags; beta channel sees prerelease tags too.
+
+#### Check/backoff policy
+
+- Auto-check runs at most once per day (`GH_OTA_DAILY_CHECK_SEC`).
+- WiFi instability increments a fail streak with exponential backoff: 6 h → 12 h → 24 h → 48 h max.
+- Backoff is reset after 2 consecutive stable WiFi cycles.
+- Manual `/otaupdate_check` and `/otaupdate_now` bypass daily interval and backoff.
+
+#### GitHub OTA NVS keys (namespace: `birdnest_gh`)
+
+| Key | Type | Description |
+|---|---|---|
+| `otaAuto` | bool | Auto-update enabled |
+| `otaChannel` | string | `stable` or `beta` |
+| `otaToken` | string | GitHub API token (private repos) |
+| `otaLastChk` | uint32 | Unix timestamp of last successful check |
+| `otaWifiFail` | uint16 | Consecutive WiFi stability failures |
+| `otaChkFail` | uint16 | Consecutive check failures |
+| `otaWifiOk` | uint8 | Consecutive stable cycles (for backoff reset) |
+| `otaBackoff` | uint32 | Backoff-end timestamp (0 = no backoff) |
+| `otaTarget` | string | JSON-serialized pending install target |
+| `otaLastReason` | string | Last OTA block/fail reason code |
+| `otaRebootFlg` | bool | Set before install reboot, cleared on next boot |
+| `otaLastTgt` | string | Version string of last attempted install |
 
 ### MQTT
 - Runtime MQTT client with automatic reconnect
@@ -228,6 +349,7 @@ Common remote error reasons (`cameraGetLastError`):
 - LWT availability support (`online` / `offline`, retained)
 - Separate state/event/availability topic model
 - Payload schema versioning (`schema_version`)
+- GitHub OTA events published via `mqttPublishOtaEvent()` to the event topic
 
 ---
 
@@ -237,11 +359,11 @@ Common remote error reasons (`cameraGetLastError`):
 
 If no custom topic is set, these topics are used:
 
-- State topic: `birdnest/CAMERA_LABEL/status`
-- Event topic: `birdnest/CAMERA_LABEL/event`
-- Availability topic: `birdnest/CAMERA_LABEL/availability`
+- State topic: `birdnest/<deviceLabel>/status`
+- Event topic: `birdnest/<deviceLabel>/event`
+- Availability topic: `birdnest/<deviceLabel>/availability`
 
-Where `CAMERA_LABEL` comes from `platformio.ini` build flags.
+Where `<deviceLabel>` is the runtime device identity loaded from NVS (see Runtime Device Identity section). The default is `BirdNest-XXXXXXXX` based on MAC address.
 
 If you set a custom topic with `/mqtttopic`:
 
@@ -301,6 +423,15 @@ Event payload (`event`) is JSON and includes:
 - `detail`
 - `uptime_s`
 
+GitHub OTA event payload additionally includes:
+
+- `reason` — machine-readable reason code (e.g. `no_update`, `battery_low`, `sha256_mismatch`)
+- `current_version` — running firmware version
+- `target_version` — target version being installed (empty if check-only)
+- `channel` — `stable` or `beta`
+
+OTA event types: `ota_check_start`, `ota_check_no_update`, `ota_update_available`, `ota_install_blocked`, `ota_update_start`, `ota_update_progress`, `ota_update_ok`, `ota_update_fail`, `ota_check_fail`
+
 Availability payload (`availability`) values:
 
 - `online` (retained on successful connect)
@@ -310,28 +441,76 @@ Availability payload (`availability`) values:
 
 ## NVS Storage Structure
 
+All keys live in the `birdnest` namespace unless otherwise noted.
+
+### Device identity
+
+| Key | Type | Description |
+|---|---|---|
+| `devLabel` | string | Runtime device label (default: `BirdNest-XXXXXXXX`) |
+| `otaHost` | string | ArduinoOTA mDNS hostname (default: `birdnest-xxxxxxxx`) |
+
+### Telegram credentials and runtime config
+
 | Key | Type | Description |
 |---|---|---|
 | `botToken` | string | Telegram bot token |
-| `chatId` | string | Telegram chat ID |
-| `debugChatId` | string | Debug chat ID (WiFi) |
-| `sleepSec` | int | Sleep interval in seconds |
-| `maintMode` | int | Maintenance mode (0=off, 1=on) |
-| `debugVerbosity` | int | Debug verbosity level |
-| `camMirror` | int | Camera mirror flip |
-| `camFlip` | int | Camera vertical flip |
-| `lastMsgId` | int | Last Telegram message ID |
-| `bCalEn` | int | Battery calibration enabled |
-| `bCalA` / `bCalB` | float | Two-point calibration coefficients |
-| `calibrationPoints` | array | Array of (voltage, temp) calibration points |
-| `otaArmed` | int | OTA armed flag |
-| `otaCycles` | int | OTA recovery cycles |
-| `wifiFail` | int | WiFi connection failure counter |
-| `mqttHost` | string | MQTT broker host/IP |
-| `mqttPort` | int | MQTT broker port |
-| `mqttUser` | string | MQTT username (optional) |
-| `mqttPass` | string | MQTT password (optional) |
-| `mqttTopic` | string | Custom MQTT publish topic (optional) |
+| `chatId` | string | Telegram main chat ID |
+| `debugChatId` | string | Telegram debug chat ID |
+| `sleepSec` | uint32 | Deep sleep interval in seconds |
+| `maintMode` | bool | Maintenance mode |
+| `dbgVerb` | uint8 | Debug verbosity (0–2) |
+| `camMirror` | bool | Camera mirror |
+| `camFlip` | bool | Camera vertical flip |
+| `lastMsgId` | int32 | Last processed Telegram update ID |
+
+### Battery calibration
+
+| Key | Type | Description |
+|---|---|---|
+| `bCalEn` | bool | Two-point calibration enabled |
+| `bCalA` / `bCalB` | float | Calibration slope / offset |
+| `bCalRV1/MV1/RV2/MV2` | float | Calibration reference points |
+
+### ArduinoOTA recovery
+
+| Key | Type | Description |
+|---|---|---|
+| `otaArmed` | bool | Recovery mode armed |
+| `otaCycles` | uint16 | Recovery cycles remaining |
+
+### WiFi
+
+| Key | Type | Description |
+|---|---|---|
+| `wifiFail` | uint16 | Consecutive WiFi boot failure counter |
+
+### MQTT
+
+| Key | Type | Description |
+|---|---|---|
+| `mqttHost` | string | Broker host/IP |
+| `mqttPort` | uint16 | Broker port |
+| `mqttUser` | string | Username (optional) |
+| `mqttPass` | string | Password (optional) |
+| `mqttTopic` | string | Custom state topic (optional) |
+
+### GitHub OTA (namespace: `birdnest_gh`)
+
+| Key | Type | Description |
+|---|---|---|
+| `otaAuto` | bool | Auto-update enabled |
+| `otaChannel` | string | `stable` or `beta` |
+| `otaToken` | string | GitHub API token |
+| `otaLastChk` | uint32 | Unix timestamp of last check |
+| `otaWifiFail` | uint16 | WiFi stability fail streak |
+| `otaChkFail` | uint16 | Check fail streak |
+| `otaWifiOk` | uint8 | Stable cycles counter (backoff reset) |
+| `otaBackoff` | uint32 | Backoff end timestamp |
+| `otaTarget` | string | Pending install target (JSON) |
+| `otaLastReason` | string | Last block/fail reason code |
+| `otaRebootFlg` | bool | Set before install reboot |
+| `otaLastTgt` | string | Last attempted install version |
 
 ---
 
