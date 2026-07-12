@@ -18,7 +18,7 @@ The hardware design assets are stored in `hardware/BirdNest_pcb/`.
 
 ### 3D PCB View
 
-![BirdNest PCB 3D view](hardware/BirdNest_pcb/3D%20view.png)
+![BirdNest PCB 3D view](hardware/BirdNest_pcb/3D_view_2026-07-12.png)
 
 ---
 
