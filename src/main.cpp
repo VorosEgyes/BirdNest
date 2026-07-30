@@ -27,6 +27,39 @@ static const uint32_t WIFI_RETRY_BACKOFF_SEC = 300;
 static bool s_timeSynced = false;
 static unsigned long s_wifiDownSinceMs = 0;
 static unsigned long s_lastWifiReconnectMs = 0;
+static uint32_t s_wifiRecoveryAttempts = 0;
+static unsigned long s_lastHealthReportMs = 0;
+static unsigned long s_lastGoodCameraActivityMs = 0;
+static unsigned long s_lastGoodWifiActivityMs = 0;
+
+static void updateHealthActivity(bool wifiOk, bool cameraOk) {
+    const unsigned long now = millis();
+    if (wifiOk) s_lastGoodWifiActivityMs = now;
+    if (cameraOk) s_lastGoodCameraActivityMs = now;
+}
+
+static void emitHealthReportIfNeeded() {
+    const unsigned long now = millis();
+    if ((now - s_lastHealthReportMs) < 600000UL) {
+        return;
+    }
+    s_lastHealthReportMs = now;
+
+    const bool wifiUp = (WiFi.status() == WL_CONNECTED);
+    const String msg = "[HEALTH] wifi=" + String(wifiUp ? "UP" : "DOWN") +
+                       " reconnects=" + String(netHealthGetReconnectAttempts()) +
+                       " disconnects=" + String(netHealthGetDisconnectCount()) +
+                       " camera=" + String(s_lastGoodCameraActivityMs > 0 ? "ACTIVE" : "IDLE");
+    Serial.println(msg);
+    telegramSendDebug(msg, 1);
+}
+
+static void prepareForSleepShutdown() {
+    cameraDeinit();
+    WiFi.disconnect(true, true);
+    WiFi.mode(WIFI_OFF);
+    yield();
+}
 
 static bool wifiConnectWithRetries() {
     const int retries = WIFI_BOOT_CONNECT_RETRIES > 0 ? WIFI_BOOT_CONNECT_RETRIES : 1;
@@ -51,15 +84,18 @@ static bool wifiConnectWithRetries() {
 }
 
 static bool wifiRuntimeRecoveryTick() {
+    const unsigned long now = millis();
+
     if (WiFi.status() == WL_CONNECTED) {
         if (s_wifiDownSinceMs != 0) {
             netHealthOnReconnectSuccess();
         }
         s_wifiDownSinceMs = 0;
+        s_wifiRecoveryAttempts = 0;
+        updateHealthActivity(true, false);
         return true;
     }
 
-    const unsigned long now = millis();
     if (s_wifiDownSinceMs == 0) {
         s_wifiDownSinceMs = now;
         s_lastWifiReconnectMs = 0;
@@ -71,9 +107,20 @@ static bool wifiRuntimeRecoveryTick() {
         static_cast<unsigned long>(WIFI_RUNTIME_RECONNECT_INTERVAL_SEC) * 1000UL;
     if ((now - s_lastWifiReconnectMs) >= reconnectIntervalMs) {
         s_lastWifiReconnectMs = now;
+        ++s_wifiRecoveryAttempts;
         netHealthOnReconnectAttempt();
-        Serial.println("[WIFI] runtime reconnect attempt");
-        WiFi.reconnect();
+        Serial.println("[WIFI] runtime reconnect attempt " + String(s_wifiRecoveryAttempts));
+        if (s_wifiRecoveryAttempts >= 4) {
+            Serial.println("[WIFI] repeated reconnect failures, forcing modem reset");
+            WiFi.disconnect(true, true);
+            WiFi.mode(WIFI_OFF);
+            delay(250);
+            WiFi.mode(WIFI_STA);
+            WiFi.begin();
+        } else {
+            WiFi.disconnect(true, true);
+            WiFi.reconnect();
+        }
     }
 
     const unsigned long rebootAfterMs =
@@ -135,6 +182,7 @@ static void enterDeepSleepSeconds(uint32_t seconds) {
     telegramSendDebug(sleepMsg, 0);
 
     Serial.println("[PWR] entering deep sleep for " + String(seconds) + "s");
+    prepareForSleepShutdown();
     esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(seconds) * 1000000ULL);
     esp_deep_sleep_start();
 }
@@ -149,6 +197,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
     }
 
     const int maxTries = retryOnce ? (PHOTO_SEND_MAX_RETRIES > 1 ? PHOTO_SEND_MAX_RETRIES : 2) : 1;
+    updateHealthActivity(false, true);
     bool ok = false;
     for (int attempt = 1; attempt <= maxTries; ++attempt) {
         ok = cameraSendPhoto(chatId);
@@ -159,12 +208,24 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
 
         if (attempt < maxTries) {
             Serial.println("[PHOTO] send failed, retrying...");
+            cameraDeinit();
+            WiFi.disconnect(true, true);
             WiFi.reconnect();
             const unsigned long backoffMs = static_cast<unsigned long>(PHOTO_SEND_RETRY_BACKOFF_MS) * static_cast<unsigned long>(attempt);
             telegramSendDebug("[PHOTO] retrying in " + String(backoffMs) + " ms (next attempt " + String(attempt + 1) + "/" + String(maxTries) + ")", 1);
             delay(backoffMs);
             yield();
         }
+    }
+
+    if (ok) {
+        updateHealthActivity(true, true);
+    } else {
+        Serial.println("[PHOTO] forcing camera/WiFi recovery after repeated failure");
+        cameraDeinit();
+        WiFi.disconnect(true, true);
+        WiFi.reconnect();
+        updateHealthActivity(true, false);
     }
 
     // In maintenance mode, keep camera initialized between manual captures
@@ -405,9 +466,12 @@ void loop() {
 
     // Keep the node reachable on unstable links.
     if (!wifiRuntimeRecoveryTick()) {
+        emitHealthReportIfNeeded();
         delay(20);
         return;
     }
+
+    emitHealthReportIfNeeded();
 
     // Handle incoming Telegram commands
     telegramLoop();

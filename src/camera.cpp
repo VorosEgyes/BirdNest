@@ -2,6 +2,8 @@
 #include "wifi_manager.h"
 #include "telegram.h"
 #include "config.h"
+#include "temperature.h"
+#include "battery.h"
 
 #include <Arduino.h>
 #include "esp_camera.h"
@@ -36,6 +38,23 @@
 static bool s_flashInited = false;
 static bool s_cameraInitialized = false;
 static String s_lastPhotoError = "none";
+
+static String buildPhotoCaption() {
+    const String label = String(getDeviceLabel());
+    const float tempC = tempRead();
+    const int battPct = batteryReadPercent();
+
+    String tempStr = "N/A";
+    if (tempC > -100.0f) {
+        const int tempRounded = static_cast<int>(tempC >= 0.0f ? (tempC + 0.5f) : (tempC - 0.5f));
+        tempStr = String(tempRounded) + " C";
+    }
+
+    String battVStr = String(batteryReadVoltage(), 2);
+    battVStr.replace(".", ",");
+
+    return label + ", " + tempStr + ", " + battVStr + "V (" + String(battPct) + "%)";
+}
 
 static void setLastPhotoError(const String& reason) {
     s_lastPhotoError = reason;
@@ -380,7 +399,7 @@ bool cameraSendPhoto(const char* chatId) {
         String(chatId) + "\r\n"
         "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"caption\"\r\n\r\n" +
-        String("Cam: ") + String(getDeviceLabel()) + "\r\n"
+        buildPhotoCaption() + "\r\n"
         "--" + boundary + "\r\n"
         "Content-Disposition: form-data; name=\"photo\"; filename=\"nest.jpg\"\r\n"
         "Content-Type: image/jpeg\r\n\r\n";
@@ -391,7 +410,7 @@ bool cameraSendPhoto(const char* chatId) {
 
     WiFiClientSecure client;
     client.setInsecure();
-    client.setTimeout(15000);
+    client.setTimeout(CAMERA_RESPONSE_TIMEOUT_MS);
 
     Serial.println("[CAM] connecting to api.telegram.org:443...");
      unsigned long t_connect_start = millis();

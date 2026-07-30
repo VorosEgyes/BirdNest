@@ -20,12 +20,12 @@ static WiFiClientSecure s_client;
 static String           s_token;
 static UniversalTelegramBot* s_bot = nullptr;
 
-static const unsigned long BOT_POLL_INTERVAL_MS  = 5000UL; // 5s – saves radio vs 1s polling
+static const unsigned long BOT_POLL_INTERVAL_MS  = 10000UL; // 10s – saves radio vs 1s/5s polling
 
 static unsigned long s_lastBotCheck  = 0;
 static bool          s_maintMode     = false;
 static uint32_t      s_sleepSec      = DEEP_SLEEP_SEC;
-static uint8_t       s_debugVerbosity = 2; // 0=minimal, 1=normal, 2=verbose
+static uint8_t       s_debugVerbosity = 1; // 0=minimal, 1=normal, 2=verbose
 static bool          s_camMirror     = true;
 static bool          s_camFlip       = false;
 static int32_t       s_lastMessageId = 0;  // Last processed Telegram update_id
@@ -35,8 +35,8 @@ typedef void (*PhotoCallback)(const char*);
 static PhotoCallback s_photoCb       = nullptr;
 static SleepCallback s_sleepCb       = nullptr;
 
-static const uint16_t STARTUP_MSG_PROCESS_LIMIT = 20;
-static const unsigned long STARTUP_MSG_TIME_LIMIT_MS = 10000UL;
+static const uint16_t STARTUP_MSG_PROCESS_LIMIT = 10;
+static const unsigned long STARTUP_MSG_TIME_LIMIT_MS = 5000UL;
 static const unsigned long LAST_MSG_PERSIST_INTERVAL_MS = 30000UL;
 
 static void persistLastMessageId(bool force = false) {
@@ -61,7 +61,7 @@ static void loadRuntimeConfig() {
     prefs.begin(NVS_NAMESPACE, /*readOnly=*/true);
     s_sleepSec = prefs.getUInt("sleepSec", DEEP_SLEEP_SEC);
     s_maintMode = prefs.getBool("maintMode", false);
-    s_debugVerbosity = prefs.getUChar("dbgVerb", 2);
+    s_debugVerbosity = prefs.getUChar("dbgVerb", 1);
     s_camMirror = prefs.getBool("camMirror", true);
     s_camFlip = prefs.getBool("camFlip", false);
     s_lastMessageId = prefs.getLong("lastMsgId", 0);
@@ -773,6 +773,15 @@ bool telegramSendDebug(const String& message, uint8_t level) {
     if (level > s_debugVerbosity) return true;
     const char* debugChat = getDebugChatId();
     if (!debugChat || debugChat[0] == '\0') return false;
+
+    // Never post L0 debug lines into the main chat, even if debugChat is set the same.
+    if (level == 0) {
+        const char* mainChat = getChatId();
+        if (mainChat && mainChat[0] != '\0' && String(debugChat) == String(mainChat)) {
+            return true;
+        }
+    }
+
     return telegramSend(
         debugChat,
         "[DEBUG L" + String(level) + "][" + String(getDeviceLabel()) + "] " + message
