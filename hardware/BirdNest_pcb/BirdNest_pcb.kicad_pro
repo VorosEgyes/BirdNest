@@ -39,9 +39,9 @@
         "other_text_thickness": 0.15,
         "other_text_upright": false,
         "pads": {
-          "drill": 3.2,
-          "height": 3.2,
-          "width": 3.2
+          "drill": 3.45,
+          "height": 3.45,
+          "width": 3.45
         },
         "silk_line_width": 0.1,
         "silk_text_italic": false,
@@ -647,7 +647,7 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "../../Gerber/BirdNest/",
+      "plot": "Gerber/v2/",
       "pos_files": "",
       "specctra_dsn": "",
       "step": "",
