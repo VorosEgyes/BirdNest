@@ -455,7 +455,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     }
 
     if (!manualOverride) {
-        if (WiFi.RSSI() < static_cast<int>(GH_OTA_WIFI_STABLE_RSSI_MIN) || !ghOtaHealthProbe()) {
+        if (!ghOtaHealthProbe()) {
             markWifiStabilityFailure(now);
             mqttOtaEvent("ota_check_fail", OTA_REASON_WIFI_UNSTABLE);
             return GhOtaCheck::Skipped;
@@ -634,14 +634,14 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
     const long rssi = WiFi.RSSI();
     if (!manualOverride) {
         const bool healthOk = ghOtaHealthProbe();
-        if (wifiStatus != WL_CONNECTED || rssi < GH_OTA_WIFI_STABLE_RSSI_MIN || !healthOk) {
+        if (wifiStatus != WL_CONNECTED || !healthOk) {
             savePendingTarget(target, "wifi_unstable");
             mqttOtaEvent("ota_install_blocked", OTA_REASON_WIFI_UNSTABLE, target.version);
-            telegramSendDebug("[OTA][WARN] install blocked: WiFi unstable rssi=" + String(rssi) + " health=" + String(healthOk ? "ok" : "fail"), 1);
+            telegramSendDebug("[OTA][WARN] install blocked: WiFi not connected or health probe failed health=" + String(healthOk ? "ok" : "fail"), 1);
             return false;
         }
     } else {
-        telegramSendDebug("[OTA][INFO] manual install: WiFi gate bypassed rssi=" + String(rssi), 1);
+        telegramSendDebug("[OTA][INFO] manual install: RSSI gate disabled rssi=" + String(rssi), 1);
     }
 
     const String installToken = target.isPrivateRepo ? nvsReadString(GH_OTA_KEY_TOKEN, "") : "";

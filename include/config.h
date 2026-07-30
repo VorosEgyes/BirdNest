@@ -100,7 +100,8 @@
   #define OTA_GH_API_HOST "api.github.com"
 #endif
 #ifndef GH_OTA_WIFI_STABLE_RSSI_MIN
-  #define GH_OTA_WIFI_STABLE_RSSI_MIN -85
+  // Disabled for field cameras in weak-signal areas; OTA now relies on connectivity probing instead.
+  #define GH_OTA_WIFI_STABLE_RSSI_MIN -120
 #endif
 #ifndef GH_OTA_MAX_CHECK_ATTEMPTS
   #define GH_OTA_MAX_CHECK_ATTEMPTS 4
