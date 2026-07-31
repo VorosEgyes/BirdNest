@@ -9,7 +9,9 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <esp_app_format.h>
+#include <esp_attr.h>
 #include <esp_err.h>
+#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -18,6 +20,82 @@
 #include <time.h>
 
 static bool s_ghOtaInitialized = false;
+
+enum class OtaRuntimeStage : uint32_t {
+    Idle = 0,
+    CheckEntry,
+    TelegramClose,
+    MqttStart,
+    TokenAndJsonAlloc,
+    ReleasesHttp,
+    ReleasesParse,
+    ReleaseScan,
+    ManifestHttp,
+    ManifestParse,
+    BinaryScan,
+    SavePending
+};
+
+static constexpr uint32_t GH_OTA_RUNTIME_MAGIC = 0x47484F54UL;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeMagic;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeStage;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreeHeap;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeLargestBlock;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreePsram;
+
+static void setOtaRuntimeStage(OtaRuntimeStage stage) {
+    s_otaRuntimeMagic = GH_OTA_RUNTIME_MAGIC;
+    s_otaRuntimeStage = static_cast<uint32_t>(stage);
+    s_otaRuntimeFreeHeap = static_cast<uint32_t>(
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    s_otaRuntimeLargestBlock = static_cast<uint32_t>(
+        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    s_otaRuntimeFreePsram = static_cast<uint32_t>(
+        heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+}
+
+class OtaRuntimeStageGuard {
+public:
+    OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::CheckEntry); }
+    ~OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::Idle); }
+};
+
+static const char* otaRuntimeStageName(OtaRuntimeStage stage) {
+    switch (stage) {
+        case OtaRuntimeStage::CheckEntry:       return "check_entry";
+        case OtaRuntimeStage::TelegramClose:    return "telegram_close";
+        case OtaRuntimeStage::MqttStart:        return "mqtt_start";
+        case OtaRuntimeStage::TokenAndJsonAlloc:return "token_json_alloc";
+        case OtaRuntimeStage::ReleasesHttp:     return "releases_http";
+        case OtaRuntimeStage::ReleasesParse:    return "releases_parse";
+        case OtaRuntimeStage::ReleaseScan:      return "release_scan";
+        case OtaRuntimeStage::ManifestHttp:     return "manifest_http";
+        case OtaRuntimeStage::ManifestParse:    return "manifest_parse";
+        case OtaRuntimeStage::BinaryScan:       return "binary_scan";
+        case OtaRuntimeStage::SavePending:      return "save_pending";
+        default:                                return "unknown";
+    }
+}
+
+struct PsramJsonAllocator {
+    void* allocate(size_t size) {
+        void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        return ptr ? ptr : heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+
+    void deallocate(void* ptr) {
+        heap_caps_free(ptr);
+    }
+
+    void* reallocate(void* ptr, size_t newSize) {
+        void* resized = heap_caps_realloc(ptr, newSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        return resized ? resized : heap_caps_realloc(ptr, newSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+};
+
+using ReleasesJsonDocument = BasicJsonDocument<PsramJsonAllocator>;
+static esp_err_t s_lastNativeHttpError = ESP_OK;
+static int s_lastNativeHttpErrno = 0;
 
 static constexpr uint32_t GH_OTA_DAILY_CHECK_SEC         = 86400UL;
 static constexpr float    GH_OTA_MIN_INSTALL_BATTERY_V   = 3.60f;
@@ -50,6 +128,26 @@ static constexpr const char* OTA_REASON_HEALTH_CONFIRMED_DEGRADED         = "hea
 static constexpr const char* OTA_REASON_HEALTH_PROBE_FAILED               = "health_probe_failed";
 static constexpr const char* GH_OTA_KEY_REBOOT_FLG                       = "otaRebootFlg";
 static constexpr const char* GH_OTA_KEY_LAST_TGT                         = "otaLastTgt";
+
+// USERTrust ECC Certification Authority, trust anchor for GitHub's current
+// Sectigo E36/E46 certificate chain. SHA-256: 4F:F4:60:D5:...:D2:A9:AD:7A.
+static const char GH_OTA_ROOT_CA[] PROGMEM = R"PEM(-----BEGIN CERTIFICATE-----
+MIICjzCCAhWgAwIBAgIQXIuZxVqUxdJxVt7NiYDMJjAKBggqhkjOPQQDAzCBiDEL
+MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl
+eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT
+JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAwMjAx
+MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNVBAgT
+Ck5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVUaGUg
+VVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBFQ0MgQ2VydGlm
+aWNhdGlvbiBBdXRob3JpdHkwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQarFRaqflo
+I+d61SRvU8Za2EurxtW20eZzca7dnNYMYf3boIkDuAUU7FfO7l0/4iGzzvfUinng
+o4N+LZfQYcTxmdwlkWOrfzCjtHDix6EznPO/LlxTsV+zfTJ/ijTjeXmjQjBAMB0G
+A1UdDgQWBBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAOBgNVHQ8BAf8EBAMCAQYwDwYD
+VR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAwNoADBlAjA2Z6EWCNzklwBBHU6+4WMB
+zzuqQhFkoJ2UOQIReVx7Hfpkue4WQrO/isIJxOzksU0CMQDpKmFHjFJKS04YcPbW
+RNZu9YO6bVi9JNlWSOrvxKJGgYhqOkbRqZtNyWHa0V1Xahg=
+-----END CERTIFICATE-----
+)PEM";
 
 // Keep download buffer in static storage to avoid large stack usage.
 static uint8_t s_otaDownloadBuf[4096];
@@ -361,45 +459,152 @@ static uint32_t wifiBackoffSeconds(uint8_t wifiFailStreak) {
 // HTTP helpers
 // ============================================================
 
+class NativeHttpBody {
+public:
+    explicit NativeHttpBody(size_t capacity)
+        : m_capacity(capacity) {
+        m_data = static_cast<char*>(
+            heap_caps_malloc(capacity + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!m_data) {
+            m_data = static_cast<char*>(
+                heap_caps_malloc(capacity + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        }
+        reset();
+    }
+
+    ~NativeHttpBody() {
+        heap_caps_free(m_data);
+    }
+
+    bool append(const char* data, size_t length) {
+        if (!m_data || m_length + length > m_capacity) {
+            m_overflow = true;
+            return false;
+        }
+        memcpy(m_data + m_length, data, length);
+        m_length += length;
+        m_data[m_length] = '\0';
+        return true;
+    }
+
+    void reset() {
+        m_length = 0;
+        m_overflow = false;
+        if (m_data) m_data[0] = '\0';
+    }
+
+    bool valid() const { return m_data != nullptr && !m_overflow; }
+    const char* data() const { return m_data; }
+    size_t length() const { return m_length; }
+
+private:
+    char* m_data = nullptr;
+    size_t m_capacity = 0;
+    size_t m_length = 0;
+    bool m_overflow = false;
+};
+
+static esp_err_t ghNativeHttpEvent(esp_http_client_event_t* event) {
+    NativeHttpBody* body = static_cast<NativeHttpBody*>(event->user_data);
+    if (!body) return ESP_FAIL;
+
+    if (event->event_id == HTTP_EVENT_ON_CONNECTED) {
+        body->reset();
+    } else if (event->event_id == HTTP_EVENT_ON_DATA && event->data_len > 0) {
+        if (!body->append(static_cast<const char*>(event->data),
+                          static_cast<size_t>(event->data_len))) {
+            return ESP_FAIL;
+        }
+    }
+    return ESP_OK;
+}
+
+static bool ghNativeHttpGet(const String& url,
+                            const String& token,
+                            const char* accept,
+                            NativeHttpBody& body,
+                            int& outCode) {
+    outCode = -1;
+    s_lastNativeHttpError = ESP_OK;
+    s_lastNativeHttpErrno = 0;
+    if (!body.valid()) return false;
+
+    esp_http_client_config_t config = {};
+    config.url = url.c_str();
+    config.user_agent = "BirdNest-OTA";
+    config.cert_pem = GH_OTA_ROOT_CA;
+    config.method = HTTP_METHOD_GET;
+    config.timeout_ms = GH_OTA_HTTP_TIMEOUT_MS;
+    config.disable_auto_redirect = false;
+    config.max_redirection_count = 5;
+    config.event_handler = ghNativeHttpEvent;
+    config.transport_type = HTTP_TRANSPORT_OVER_SSL;
+    config.buffer_size = 1024;
+    config.buffer_size_tx = 1024;
+    config.user_data = &body;
+    config.skip_cert_common_name_check = false;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) return false;
+
+    esp_http_client_set_header(client, "X-GitHub-Api-Version", "2022-11-28");
+    esp_http_client_set_header(client, "Accept", accept);
+    String authHeader;
+    if (!token.isEmpty()) {
+        authHeader = "Bearer " + token;
+        esp_http_client_set_header(client, "Authorization", authHeader.c_str());
+    }
+
+    const esp_err_t result = esp_http_client_perform(client);
+    s_lastNativeHttpError = result;
+    s_lastNativeHttpErrno = esp_http_client_get_errno(client);
+    outCode = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+    return result == ESP_OK && outCode == 200 && body.valid();
+}
+
 static bool ghHttpGet(const String& url, const String& token, bool octetAccept,
                       String& outBody, int& outCode) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-    if (!http.begin(client, url)) { outCode = -1; return false; }
-    http.setTimeout(GH_OTA_HTTP_TIMEOUT_MS);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("User-Agent", "BirdNest-OTA");
-    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
-    http.addHeader("Accept", octetAccept ? "application/octet-stream" : "application/vnd.github+json");
-    if (!token.isEmpty()) http.addHeader("Authorization", "Bearer " + token);
-    outCode = http.GET();
-    if (outCode > 0) outBody = http.getString();
-    http.end();
-    return outCode == 200;
+    NativeHttpBody body(4096);
+    const bool ok = ghNativeHttpGet(
+        url,
+        token,
+        octetAccept ? "application/octet-stream" : "application/vnd.github+json",
+        body,
+        outCode);
+    outBody = "";
+    if (body.data() && body.length() > 0) {
+        outBody.concat(body.data(), static_cast<unsigned int>(body.length()));
+    }
+    return ok;
 }
 
 static bool ghFetchReleases(const String& token,
-                            DynamicJsonDocument& outDoc,
+                            ReleasesJsonDocument& outDoc,
                             bool& parseError,
                             int& httpCode) {
     parseError = false;
     httpCode = -1;
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
     const String url = String("https://") + OTA_GH_API_HOST + "/repos/" + OTA_GH_OWNER + "/" + OTA_GH_REPO + "/releases?per_page=10";
-    if (!http.begin(client, url)) return false;
-    http.setTimeout(GH_OTA_HTTP_TIMEOUT_MS);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("User-Agent", "BirdNest-OTA");
-    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
-    http.addHeader("Accept", "application/vnd.github+json");
-    if (!token.isEmpty()) http.addHeader("Authorization", "Bearer " + token);
-    httpCode = http.GET();
-    if (httpCode != 200) { http.end(); return false; }
-    DeserializationError derr = deserializeJson(outDoc, http.getStream());
-    http.end();
+    NativeHttpBody body(65536);
+    setOtaRuntimeStage(OtaRuntimeStage::ReleasesHttp);
+    if (!ghNativeHttpGet(url, token, "application/vnd.github+json", body, httpCode)) {
+        return false;
+    }
+
+    setOtaRuntimeStage(OtaRuntimeStage::ReleasesParse);
+    StaticJsonDocument<512> filter;
+    filter[0]["tag_name"] = true;
+    filter[0]["prerelease"] = true;
+    filter[0]["assets"][0]["name"] = true;
+    filter[0]["assets"][0]["url"] = true;
+    filter[0]["assets"][0]["browser_download_url"] = true;
+
+    DeserializationError derr = deserializeJson(
+        outDoc,
+        body.data(),
+        body.length(),
+        DeserializationOption::Filter(filter));
     if (derr != DeserializationError::Ok || !outDoc.is<JsonArray>()) { parseError = true; return false; }
     return true;
 }
@@ -524,6 +729,8 @@ bool ghOtaHealthProbe() {
 }
 
 GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
+    OtaRuntimeStageGuard runtimeStageGuard;
+
     if (!s_ghOtaInitialized) {
         telegramSendDebug("[OTA][ERR] check failed: module not initialized", 0);
         return GhOtaCheck::Error;
@@ -558,10 +765,17 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
     }
 
+    // UniversalTelegramBot keeps its TLS client alive after command replies.
+    // Release those buffers before opening a second TLS session to GitHub.
+    setOtaRuntimeStage(OtaRuntimeStage::TelegramClose);
+    telegramCloseConnection();
+
+    setOtaRuntimeStage(OtaRuntimeStage::MqttStart);
     mqttOtaEvent("ota_check_start", "github_release_query");
 
+    setOtaRuntimeStage(OtaRuntimeStage::TokenAndJsonAlloc);
     const String token = nvsReadString(GH_OTA_KEY_TOKEN);
-    DynamicJsonDocument releasesDoc(32768);
+    ReleasesJsonDocument releasesDoc(12288);
     bool releasesOk = false, releasesParseErr = false;
     int releasesCode = -1;
     for (uint8_t attempt = 0; attempt < GH_OTA_MAX_CHECK_ATTEMPTS; ++attempt) {
@@ -582,6 +796,8 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         else                          hint = "unexpected API response";
         telegramSendDebug(
             "[OTA][ERR] releases fetch failed: http=" + String(releasesCode) +
+            " esp=" + String(static_cast<int>(s_lastNativeHttpError)) +
+            " errno=" + String(s_lastNativeHttpErrno) +
             " parse=" + String(releasesParseErr ? "yes" : "no") +
             " repo=" + String(OTA_GH_OWNER) + "/" + String(OTA_GH_REPO) +
             " hint=" + hint, 0);
@@ -594,6 +810,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     String bestVersion, bestManifestUrl, bestManifestBrowserUrl;
     bool bestPrivate = !token.isEmpty();
 
+    setOtaRuntimeStage(OtaRuntimeStage::ReleaseScan);
     for (JsonObject release : releasesDoc.as<JsonArray>()) {
         const bool prerelease = release["prerelease"] | false;
         if (channel == "stable" && prerelease) continue;
@@ -631,6 +848,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     const String manifestUrl = (!token.isEmpty() && !bestManifestUrl.isEmpty()) ? bestManifestUrl : bestManifestBrowserUrl;
     const bool manifestOctet = !token.isEmpty() && !bestManifestUrl.isEmpty();
     bool manifestOk = false;
+    setOtaRuntimeStage(OtaRuntimeStage::ManifestHttp);
     for (uint8_t attempt = 0; attempt < GH_OTA_MAX_CHECK_ATTEMPTS; ++attempt) {
         manifestBody = ""; manifestCode = -1;
         if (ghHttpGet(manifestUrl, token, manifestOctet, manifestBody, manifestCode)) { manifestOk = true; break; }
@@ -644,6 +862,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     }
 
     StaticJsonDocument<2048> manifest;
+    setOtaRuntimeStage(OtaRuntimeStage::ManifestParse);
     if (deserializeJson(manifest, manifestBody) != DeserializationError::Ok) {
         incrementCheckFailStreak();
         telegramSendDebug("[OTA][ERR] manifest parse failed: bytes=" + String(manifestBody.length()), 0);
@@ -663,6 +882,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
 
     // Resolve binary URL from releases list
     String binApiUrl, binBrowserUrl;
+    setOtaRuntimeStage(OtaRuntimeStage::BinaryScan);
     for (JsonObject release : releasesDoc.as<JsonArray>()) {
         String tag = release["tag_name"] | "";
         if (tag != ("v" + bestVersion)) continue;
@@ -696,9 +916,27 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
 
     if (now > 100000) nvsWriteU32(GH_OTA_KEY_LAST_CHK, static_cast<uint32_t>(now));
     nvsWriteU16(GH_OTA_KEY_CHK_FAIL, 0);
+    setOtaRuntimeStage(OtaRuntimeStage::SavePending);
     savePendingTarget(out, "");
     mqttOtaEvent("ota_update_available", OTA_REASON_UPDATE_FOUND, bestVersion);
     return GhOtaCheck::UpdateAvailable;
+}
+
+String ghOtaConsumeCrashStage() {
+    if (s_otaRuntimeMagic != GH_OTA_RUNTIME_MAGIC ||
+        s_otaRuntimeStage == static_cast<uint32_t>(OtaRuntimeStage::Idle)) {
+        return "";
+    }
+
+    const OtaRuntimeStage stage = static_cast<OtaRuntimeStage>(s_otaRuntimeStage);
+    const uint32_t freeHeap = s_otaRuntimeFreeHeap;
+    const uint32_t largestBlock = s_otaRuntimeLargestBlock;
+    const uint32_t freePsram = s_otaRuntimeFreePsram;
+    setOtaRuntimeStage(OtaRuntimeStage::Idle);
+    return String(otaRuntimeStageName(stage)) +
+           " free=" + String(freeHeap) +
+           " largest=" + String(largestBlock) +
+           " psram=" + String(freePsram);
 }
 
 bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {

@@ -14,6 +14,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_ota_ops.h>
+#include <esp_system.h>
 
 // static objects, not pointers, token set at construct time.
 static WiFiClientSecure s_client;
@@ -31,6 +32,9 @@ static bool          s_camFlip       = false;
 static int32_t       s_lastMessageId = 0;  // Last processed Telegram update_id
 static bool          s_lastMsgDirty  = false;
 static unsigned long s_lastMsgPersistMs = 0;
+enum class PendingOtaAction : uint8_t { None, Check, Install };
+static PendingOtaAction s_pendingOtaAction = PendingOtaAction::None;
+static String           s_pendingOtaChatId;
 typedef void (*PhotoCallback)(const char*);
 static PhotoCallback s_photoCb       = nullptr;
 static SleepCallback s_sleepCb       = nullptr;
@@ -686,38 +690,16 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             return;
         }
         const bool isNow = text.startsWith("/otaupdate_now");
+        if (s_pendingOtaAction != PendingOtaAction::None) {
+            telegramSend(chatId.c_str(), "An OTA operation is already pending.");
+            return;
+        }
+
+        s_pendingOtaAction = isNow ? PendingOtaAction::Install : PendingOtaAction::Check;
+        s_pendingOtaChatId = chatId;
         telegramSend(chatId.c_str(),
             isNow ? "OTA check+install started. May take ~20 s..."
                   : "OTA check started. May take ~20 s...");
-
-        // Lazy init: safe to call here because Telegram commands arrive after
-        // the ArduinoOTA startup window has long settled.
-        ghOtaInit();
-
-        GhOtaTarget target;
-        const GhOtaCheck check = ghOtaCheckForUpdate(target, true);
-        if (check == GhOtaCheck::NoUpdate) {
-            telegramSend(chatId.c_str(), "OTA check done: no newer release found."); return;
-        }
-        if (check == GhOtaCheck::Skipped) {
-            telegramSend(chatId.c_str(), "OTA check skipped (network/time gate)."); return;
-        }
-        if (check == GhOtaCheck::Error) {
-            telegramSend(chatId.c_str(), "OTA check failed. See debug chat."); return;
-        }
-        telegramSend(chatId.c_str(),
-            "Update available: " + target.version +
-            " (channel=" + target.channel +
-            " min_batt=" + String(target.minBatteryV, 2) + "V)");
-        if (isNow) {
-            const bool ok = ghOtaInstall(target, true);
-            if (!ok) {
-                const String reason = ghOtaGetPendingReason();
-                telegramSend(chatId.c_str(),
-                    "Install not started. reason=" + (reason.isEmpty() ? "unknown" : reason) +
-                    "\nCheck /otastatus and debug chat.");
-            }
-        }
     }
     else if (text.startsWith("/otatoken_set ")) {
         String token = text.substring(String("/otatoken_set ").length());
@@ -817,8 +799,30 @@ bool telegramSendDebug(const String& message, uint8_t level) {
     );
 }
 
+void telegramCloseConnection() {
+    s_client.stop();
+    yield();
+}
+
+static const char* resetReasonName(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_POWERON:  return "POWERON";
+        case ESP_RST_EXT:      return "EXTERNAL";
+        case ESP_RST_SW:       return "SOFTWARE";
+        case ESP_RST_PANIC:    return "PANIC";
+        case ESP_RST_INT_WDT:  return "INT_WDT";
+        case ESP_RST_TASK_WDT: return "TASK_WDT";
+        case ESP_RST_WDT:      return "WDT";
+        case ESP_RST_DEEPSLEEP:return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "UNKNOWN";
+    }
+}
+
 bool telegramSendWelcome() {
     const bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    const String otaCrashStage = ghOtaConsumeCrashStage();
     int32_t rssi = wifiConnected ? WiFi.RSSI() : 0;
     float temp = tempRead();
     float battRaw = batteryReadRawVoltage();
@@ -829,8 +833,13 @@ bool telegramSendWelcome() {
     String rssiStr = wifiConnected
         ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
         : String("N/A");
+    String resetInfo = "Reset reason: " + String(resetReasonName(esp_reset_reason())) + "\n";
+    if (!otaCrashStage.isEmpty()) {
+        resetInfo += "OTA crash stage: " + otaCrashStage + "\n";
+    }
     String msg = "BirdNest camera online!\n"
                  "Device: " + String(getDeviceLabel()) + "\n"
+                 + resetInfo +
                  "IP: " + WiFi.localIP().toString() + "\n"
                  "WiFi RSSI: " + rssiStr + "\n"
                  "Battery: " + battStr + "\n"
@@ -906,6 +915,45 @@ void telegramLoop() {
     if (numNewMessages > 0) {
         for (int i = 0; i < numNewMessages; i++) handleMessage(s_bot->messages[i]);
         persistLastMessageId(false);
+    }
+}
+
+void telegramRunDeferredActions() {
+    if (s_pendingOtaAction == PendingOtaAction::None) return;
+
+    const PendingOtaAction action = s_pendingOtaAction;
+    const String chatId = s_pendingOtaChatId;
+    s_pendingOtaAction = PendingOtaAction::None;
+    s_pendingOtaChatId = "";
+
+    telegramCloseConnection();
+    ghOtaInit();
+
+    GhOtaTarget target;
+    const GhOtaCheck check = ghOtaCheckForUpdate(target, true);
+    if (check == GhOtaCheck::NoUpdate) {
+        telegramSend(chatId.c_str(), "OTA check done: no newer release found.");
+        return;
+    }
+    if (check == GhOtaCheck::Skipped) {
+        telegramSend(chatId.c_str(), "OTA check skipped (network/time gate).");
+        return;
+    }
+    if (check == GhOtaCheck::Error) {
+        telegramSend(chatId.c_str(), "OTA check failed. See debug chat.");
+        return;
+    }
+
+    telegramSend(chatId.c_str(),
+        "Update available: " + target.version +
+        " (channel=" + target.channel +
+        " min_batt=" + String(target.minBatteryV, 2) + "V)");
+
+    if (action == PendingOtaAction::Install && !ghOtaInstall(target, true)) {
+        const String reason = ghOtaGetPendingReason();
+        telegramSend(chatId.c_str(),
+            "Install not started. reason=" + (reason.isEmpty() ? "unknown" : reason) +
+            "\nCheck /otastatus and debug chat.");
     }
 }
 

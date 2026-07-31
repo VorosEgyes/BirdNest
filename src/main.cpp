@@ -477,6 +477,7 @@ void loop() {
 
     // Handle incoming Telegram commands
     telegramLoop();
+    telegramRunDeferredActions();
     mqttLoop();
 
     // Periodic photo + deep sleep cycle

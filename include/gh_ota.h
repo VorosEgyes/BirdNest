@@ -71,6 +71,10 @@ void ghOtaConfirmHealthIfPending();
 // JSON status string for /otastatus and MQTT telemetry.
 String ghOtaStatusJson();
 
+// Return and clear the OTA phase retained across an abnormal reset.
+// Empty means no OTA check was active when the previous run ended.
+String ghOtaConsumeCrashStage();
+
 // Retrieve pending install target from NVS (set after check, cleared after install).
 bool ghOtaGetPendingTarget(GhOtaTarget& out);
 String ghOtaGetPendingReason();
