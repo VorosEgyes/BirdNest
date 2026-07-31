@@ -56,7 +56,7 @@ static void emitHealthReportIfNeeded() {
 
 static void prepareForSleepShutdown() {
     cameraDeinit();
-    WiFi.disconnect(true, true);
+    WiFi.disconnect(true, false);
     WiFi.mode(WIFI_OFF);
     yield();
 }
@@ -112,13 +112,13 @@ static bool wifiRuntimeRecoveryTick() {
         Serial.println("[WIFI] runtime reconnect attempt " + String(s_wifiRecoveryAttempts));
         if (s_wifiRecoveryAttempts >= 4) {
             Serial.println("[WIFI] repeated reconnect failures, forcing modem reset");
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(true, false);
             WiFi.mode(WIFI_OFF);
             delay(250);
             WiFi.mode(WIFI_STA);
             WiFi.begin();
         } else {
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(false, false);
             WiFi.reconnect();
         }
     }
@@ -209,7 +209,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
         if (attempt < maxTries) {
             Serial.println("[PHOTO] send failed, retrying...");
             cameraDeinit();
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(false, false);
             WiFi.reconnect();
             const unsigned long backoffMs = static_cast<unsigned long>(PHOTO_SEND_RETRY_BACKOFF_MS) * static_cast<unsigned long>(attempt);
             telegramSendDebug("[PHOTO] retrying in " + String(backoffMs) + " ms (next attempt " + String(attempt + 1) + "/" + String(maxTries) + ")", 1);
@@ -223,7 +223,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
     } else {
         Serial.println("[PHOTO] forcing camera/WiFi recovery after repeated failure");
         cameraDeinit();
-        WiFi.disconnect(true, true);
+        WiFi.disconnect(false, false);
         WiFi.reconnect();
         updateHealthActivity(true, false);
     }

@@ -115,7 +115,8 @@ static bool ensureConnected() {
     if (s_mqttClient.connected()) return true;
 
     const unsigned long now = millis();
-    if ((now - s_lastReconnectAttemptMs) < MQTT_RECONNECT_INTERVAL_MS) {
+    if (s_lastReconnectAttemptMs != 0 &&
+        (now - s_lastReconnectAttemptMs) < MQTT_RECONNECT_INTERVAL_MS) {
         return false;
     }
     s_lastReconnectAttemptMs = now;
