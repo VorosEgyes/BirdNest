@@ -1,8 +1,8 @@
-# RaisedGarden OTA Update Design
+# BirdNest OTA Update Design
 
 ## 1. Purpose
 
-This document defines a robust, fail-safe OTA strategy for RaisedGarden that can:
+This document defines a robust, fail-safe OTA strategy for BirdNest that can:
 
 1. Check GitHub for newer firmware.
 2. Respect battery and maintenance safety limits.
@@ -96,7 +96,7 @@ To make device-side OTA reliable, releases must follow a strict contract.
 
 The local version string is the **basis of every comparison in 5.5**, so it must not drift from the git tag. There is currently no `FW_VERSION` defined anywhere in the codebase (no build flag, no `config.h` constant). To avoid the build-flag-vs-git-tag mismatch:
 
-1. The CI pipeline (section 13) injects the version from the pushed git tag as a build flag, e.g. `-D FW_VERSION="1.2.3"`, derived from the `v*` tag that triggered the build.
+1. The CI pipeline (section 13) injects the version from the pushed git tag as a build flag, e.g. `-D FW_VERSION="1.2.3"` (the `v` prefix is optional; `parseSemVer` strips a single leading `v` per SemVer 2.0.0 §2, see swarm review M-3 and M-2 S6), derived from the `v*` tag that triggered the build.
 2. `config.h` provides only a fallback default (e.g. `0.0.0-dev`) for local/manual builds that are not tag-driven, so non-release builds never claim a real release version and never appear "up to date" against a real release.
 3. The device reports this exact string in `/otastatus` and in MQTT `current_version`.
 
@@ -114,8 +114,8 @@ Each release should include:
 
 Recommended names:
 
-1. raisedgarden-esp32c3-stable-v1.2.3.bin
-2. raisedgarden-esp32c3-beta-v1.3.0-beta.1.bin
+1. birdnest-esp32cam-v0.1.3.bin
+2. birdnest-esp32cam-v0.1.4-beta.1.bin
 3. ota-manifest.json
 
 ### 5.4 Manifest Schema (V1)
@@ -169,7 +169,7 @@ Owner/repo are **not** hardcoded in OTA logic; they come from build flags so the
 ```ini
 build_flags =
     '-D OTA_GH_OWNER="your-user"'
-    '-D OTA_GH_REPO="RaisedGarden"'
+    '-D OTA_GH_REPO="VorosEgyes/BirdNest"'
     '-D OTA_GH_API_HOST="api.github.com"'
 ```
 
@@ -179,7 +179,7 @@ build_flags =
    - Use the releases list (not `/releases/latest`) so the beta channel can see prereleases; `/latest` excludes prereleases.
 2. **Required headers on every GitHub API call:**
    - `Accept: application/vnd.github+json`
-   - `User-Agent: RaisedGarden-OTA` — **mandatory**; GitHub rejects requests without a User-Agent.
+   - `User-Agent: BirdNest-OTA` — **mandatory**; GitHub rejects requests without a User-Agent.
    - `X-GitHub-Api-Version: 2022-11-28`
    - If token present: `Authorization: Bearer <token>` (omit entirely for public/anonymous).
 3. **Asset download (the redirect/private pitfall — see 8.1.1):**
@@ -243,7 +243,7 @@ If the Check Gate passes and an update is found but the Install Gate fails, the 
 For this project, treat Wi-Fi as stable if:
 
 1. Wi-Fi status is connected.
-2. RSSI is at least `GH_OTA_WIFI_STABLE_RSSI_MIN` (current build default: `-85 dBm`).
+2. RSSI threshold (`GH_OTA_WIFI_STABLE_RSSI_MIN`, default `-85 dBm`) is **defined but not currently enforced** — the install/check gates solely on the `ghOtaHealthProbe()` HTTPS reachability. The RSSI value is still surfaced via `/netdiag` for the operator. See swarm review M-1 (v0.1.3).
 3. A short HTTPS request to GitHub API succeeds — concretely, `GET https://api.github.com/rate_limit` with the standard headers from 5.6.2 (minus `Authorization` if no token), with timeout from `GH_OTA_HTTP_TIMEOUT_MS` (current build default: `12000 ms`). This endpoint is used specifically because it is cheap, does not count meaningfully against API rate limits, and requires no repo-specific parameters — it is purely a reachability probe, not a real check. This is the exact implementation of `ghOtaHealthProbe()` (14, Phase 1 Module API), reused unchanged by both 6.3 and the post-boot health confirmation in 8.3.
 
 If unstable:
@@ -356,7 +356,7 @@ Native rollback has two hard prerequisites that are easy to omit and would cause
 2. **Bootloader rollback enabled in sdkconfig, verified.** Under the Arduino framework, ESP-IDF Kconfig options are **not** reliably applied by a plain `-D` build flag — they live in `sdkconfig`. Setting only `-DCONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=1` may compile cleanly yet leave the bootloader feature off, so rollback silently does nothing. Apply it through an sdkconfig override mechanism that the build actually consumes — V1 uses `sdkconfig.defaults` (in repo) with `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`. The PlatformIO build pipeline automatically merges this into the effective sdkconfig before compiling the bootloader.
 
    **Verification:**
-   - At build time: `pio run` output shows no errors; `sdkconfig` file generated (in `.pio/build/raisedgarden/`) includes `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` (check via `grep CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE .pio/build/raisedgarden/sdkconfig`).
+   - At build time: `pio run` output shows no errors; `sdkconfig` file generated (in `.pio/build/release/`) includes `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` (check via `grep CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE .pio/build/release/sdkconfig`).
    - At runtime (post-OTA, during first boot after update): Call `esp_ota_get_state_partition()` and confirm it returns `ESP_OTA_IMG_PENDING_VERIFY` if the update succeeded; this is the only definitive proof the feature is live. Implement this in the health confirmation phase (8.3) where it will be checked, not in a separate unit test.
 
 ### 8.3 First Boot After OTA
@@ -663,7 +663,7 @@ These map onto the state machine in 6.1, but at coarser granularity: `ghOtaCheck
 
 1. Keep the GitHub-OTA install step on streamed `esp_http_client` + native `esp_ota_*` (per 8.1), keeping the existing `ArduinoOTA` local recovery path untouched.
 2. Partition table already added (`partitions_ota_4m.csv` in repo, `platformio.ini` already configured per 8.2.1). At build time, verify binary stays under 1.5 MB: `pio run` output must show `Flash: [%] (used < 1,536,000 bytes)` to maintain ~460 KB margin per slot.
-3. Bootloader rollback already configured in `sdkconfig.defaults` (in repo). Verify at build time: `grep CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE .pio/build/raisedgarden/sdkconfig | grep -q "=y"` must exit 0. Then implement `ghOtaConfirmHealthIfPending()` in Phase 3 (8.3) to check `esp_ota_get_state_partition()` and confirm `ESP_OTA_IMG_PENDING_VERIFY` at runtime post-OTA.
+3. Bootloader rollback already configured in `sdkconfig.defaults` (in repo). Verify at build time: `grep CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE .pio/build/release/sdkconfig | grep -q "=y"` must exit 0. Then implement `ghOtaConfirmHealthIfPending()` in Phase 3 (8.3) to check `esp_ota_get_state_partition()` and confirm `ESP_OTA_IMG_PENDING_VERIFY` at runtime post-OTA.
 4. Add the native post-boot health confirmation path in setup (per 8.3), gated on `ESP_OTA_IMG_PENDING_VERIFY` so it runs only once per update and not on every deep-sleep wake (per 8.4).
 5. Preserve current health-confirmation policy: on `ESP_OTA_IMG_PENDING_VERIFY`, mark image valid after probe attempts and report degraded health when probe fails, instead of forcing rollback.
 
@@ -865,10 +865,10 @@ Porting rule: if the destination has no Telegram/MQTT, keep the OTA core module 
 Use the block below as-is when delegating migration into another repository.
 
 ```text
-Implement GitHub OTA in this repository using RaisedGarden OTA_Design.md as the source-of-truth, specifically sections 20 and 21 for transfer behavior.
+Implement GitHub OTA in this repository using BirdNest OTA_Design.md as the source-of-truth, specifically sections 20 and 21 for transfer behavior.
 
 Mandatory outcomes:
-1) Add a gh_ota module with check/install/status/health APIs equivalent to RaisedGarden.
+1) Add a gh_ota module with check/install/status/health APIs equivalent to BirdNest.
 2) Use streamed install (esp_http_client + esp_ota_begin/write/end), incremental SHA256 verification, and redirect-safe GitHub asset download.
 3) Persist OTA runtime state in NVS with <=15 char keys.
 4) Integrate boot flow: ghOtaInit(), ghOtaConfirmHealthIfPending(), auto pending install, auto check+install.
