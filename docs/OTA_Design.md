@@ -504,6 +504,41 @@ Event-specific behavior:
 3. `ota_check_no_update` sets reason to `no_update` and leaves `target_version` empty.
 4. `ota_update_ok` sets reason to `health_confirmed` or `health_confirmed_degraded` and `target_version` to the running firmware version.
 
+### 10.2.1 Reason codes (operator view, v0.1.3)
+
+Human-readable mapping for the operator when a `/otaupdate_check` or
+`/otaupdate_now` returns `no_update`, `skipped`, or `failed`. Each reason
+code maps to a likely cause and a concrete next action — the operator
+should not need to read serial logs or debug chat to know what to do.
+
+| Reason code | Likely cause | Operator action |
+|---|---|---|
+| `no_update` | Local FW is at or above the latest release on the channel. | None — periodic check is healthy. |
+| `update_found` | A newer release is available on the channel. | Run `/otastatus` for the version, then `/otaupdate_now` if battery and connectivity allow. |
+| `wifi_disconnected` | WiFi association lost before or during the check. | Check `/netdiag`; if RSSI is low, move the device closer to the AP. |
+| `wifi_unstable` | Health probe to `api.github.com` failed; check is skipped. | Run `/netdiag` to see RSSI / reconnect count; retry from `/otaupdate_check` once stable. |
+| `github_releases_http` | Non-200 from the GitHub `/releases` endpoint. | Check `https://github.com/VorosEgyes/BirdNest/releases` from a browser; GitHub may be down or rate-limited. |
+| `github_releases_parse` | Releases JSON parsed but expected fields are missing. | Open a bug with the response payload; do not retry until the maintainer confirms. |
+| `manifest_http` | Manifest endpoint failed (network or non-200). | Check the manifest URL in the release; the asset may have been replaced or removed. |
+| `manifest_parse` | Manifest JSON failed to parse. | Same as `github_releases_parse` — escalate. |
+| `manifest_missing_fields` | `version`, `binAssetUrl`, or `sha256` missing from the manifest. | Release is malformed; skip this release and wait for a fixed one. |
+| `bin_asset_not_found` | The `bin` asset name in the manifest does not match the actual release asset. | Transient during the public-repo transition; wait for the next release or check the `release-ota.yml` workflow. |
+| `battery_low` | Battery below the manifest's `min_battery_v` threshold (default 3.60 V). | Wait for sun / charge; the install will retry on the next wake cycle. |
+| `battery_unknown` | Battery ADC read returned ≤ 0.0 V (sensor fault, broken divider, miscalibration). | Inspect the battery harness; do not flash until the sensor is fixed. |
+| `token_missing_for_private_target` | A private-repo target is pending but no GitHub token is set. | Run `/otatoken_set <token>` and then `/otaupdate_check`. |
+| `no_update_partition` | No free `ota_0` / `ota_1` partition found. | Reflash over serial (see `## 17.3`); the partition table is corrupted. |
+| `manifest_sha256_invalid` | The `sha256` field in the manifest is not a 64-char hex string. | Release is malformed; skip and escalate. |
+| `install_start` | Install starting. (Informational; not a failure.) | None. |
+| `ota_begin_failed` | `esp_ota_begin` failed — flash write-protected or invalid state. | Sometimes recoverable on next boot; if persistent, reflash over serial. |
+| `download_network_interrupted` | HTTPS stream stalled or dropped. | Check WiFi signal; retry with `/otaupdate_now`. |
+| `flash_write_failed` | `esp_ota_write` returned non-OK. | Battery may have died mid-flash; if device boots OK, retry. If bricked, reflash over serial. |
+| `size_mismatch` | Downloaded byte count ≠ `Content-Length` from server. | Network glitch; retry. |
+| `ota_finish_failed` | `esp_ota_end` or `esp_ota_set_boot_partition` failed. | Often recoverable on next boot; if persistent, reflash over serial. |
+| `sha256_mismatch` | Manifest SHA256 does not match the downloaded binary. | Release is malformed or the binary was tampered with; do NOT retry, escalate. |
+| `health_confirmed` | Post-install health probe succeeded; image marked valid. (Informational.) | None. |
+| `health_confirmed_degraded` | Post-install health probe failed but the image was accepted (anti-bricking policy). | Investigate the runtime issue; the new image is running but may be impaired. |
+| `health_probe_failed` | Health probe failed 3 times during `ghOtaConfirmHealthIfPending`. | The new image is still marked valid; investigate runtime. |
+
 ## 12. Security Model (Practical for Simple Projects)
 
 1. Use HTTPS for API and binary fetch.
