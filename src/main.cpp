@@ -407,6 +407,20 @@ void setup() {
          bool ok = telegramSendWelcome();
          Serial.println(ok ? "[TG] welcome sent OK" : "[TG] welcome FAILED");
          if (!ok) telegramSendDebug("[TG] welcome message send failed", 0);
+
+         // Safety net: on cold/power-on boot, send one startup photo before
+         // entering the deep-sleep cycle so remote operators can verify
+         // camera + Telegram path even if later wake cycles fail.
+         if (!maintMode && getChatId() && getChatId()[0] != '\0') {
+             Serial.println("[PHOTO] startup capture on normal boot...");
+             telegramSendDebug("[PHOTO] normal-boot startup capture started", 1);
+             if (!captureAndSendPhoto(getChatId(), true)) {
+                 telegramSend(getChatId(), "[boot] Photo capture/send failed.");
+                 telegramSendDebug("[PHOTO] normal-boot startup capture failed", 0);
+             } else {
+                 telegramSendDebug("[PHOTO] normal-boot startup capture sent", 1);
+             }
+         }
      }
 
     // Photo capture is only performed after timer deep-sleep wakeup
