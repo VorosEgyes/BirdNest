@@ -953,3 +953,15 @@ bool ghOtaClearToken(bool* droppedPendingPrivateTarget) {
 }
 
 bool ghOtaHasToken() { return !nvsReadString(GH_OTA_KEY_TOKEN, "").isEmpty(); }
+
+void ghOtaResetAll() {
+    // Best-effort full namespace erase. Used by /reset_config so that a
+    // device sold or recycled does not retain the GitHub token, pending
+    // target, or any diagnostic state. Idempotent; missing namespace is
+    // not an error. See swarm review H-4 (v0.1.3).
+    nvs_handle_t handle;
+    if (nvs_open(GH_OTA_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return;
+    nvs_erase_all(handle);
+    nvs_commit(handle);
+    nvs_close(handle);
+}

@@ -367,6 +367,9 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(),
             "Resetting config. Connect to AP \"" + String(getApName()) + "\" to reconfigure.");
         telegramSendDebug("[CMD] executing /reset_config requested by chat " + chatId, 0);
+        // Erase the GitHub OTA NVS namespace first so the GitHub token
+        // (plaintext) does not survive a factory reset. See swarm review H-4.
+        ghOtaResetAll();
         delay(1000);
         wifiReset();
     }
@@ -707,7 +710,20 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         String token = text.substring(String("/otatoken_set ").length());
         token.trim();
         if (!ghOtaSetToken(token)) {
-            telegramSend(chatId.c_str(), "Token save failed. Usage: /otatoken_set <token>");
+            // Failure path: still delete the operator's message so the rejected
+            // token (wrong length, accidental paste with quotes, etc.) does not
+            // linger in chat history. Surface the actual length so the operator
+            // can fix it without guessing. See swarm review H-2 (v0.1.3).
+            if (s_bot && msg.message_id > 0) {
+                StaticJsonDocument<128> payload;
+                payload["chat_id"] = chatId;
+                payload["message_id"] = msg.message_id;
+                s_bot->sendPostToTelegram("deleteMessage", payload.as<JsonObject>());
+            }
+            String reject = "Token rejected: must be 10..200 chars (got ";
+            reject += String(token.length());
+            reject += "). Usage: /otatoken_set <token>";
+            telegramSend(chatId.c_str(), reject);
             return;
         }
         // Attempt to delete the message to avoid token exposure in chat history.
