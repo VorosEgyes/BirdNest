@@ -381,7 +381,7 @@ The health-confirmation path in 8.3 forces a blocking Wi-Fi + Telegram init at b
 
 ## 9. Runtime Configuration and NVS Keys
 
-Suggested NVS keys (namespace raised_garden).
+Suggested NVS keys (namespace `birdnest_gh`, see `include/gh_ota.h`).
 
 **Hard constraint: ESP32 NVS keys are limited to 15 characters and are silently truncated beyond that.** The descriptive names from the original draft (e.g. `otaWifiStabilityFailStreak`) exceed this and would collide or fail. Use the short keys below; the descriptive names are kept only as comments for readability. This matches the existing convention in the codebase (`otaArmed`, `otaCycles` in [src/ota.cpp](src/ota.cpp)).
 
@@ -395,6 +395,9 @@ Suggested NVS keys (namespace raised_garden).
 | `otaChkFail` | uint16 | otaCheckFailStreak |
 | `otaBackoff` | uint32 | otaBackoffUntilEpoch |
 | `otaTarget` | string | target version when Install Gate not yet passed |
+| `otaWifiOk` | uint8 | stable WiFi-cycle counter, used by §7.3 reset logic; incremented when an install completes without a Wi-Fi flap |
+| `otaRebootFlg` | bool | post-install reboot sentinel; set to `true` right before `ESP.restart()` so the next boot can detect a fresh-install state |
+| `otaLastTgt` | string | last successfully installed target version (separate from `otaLastChk` which is the last *check* attempt) |
 | `otaLastReason` | string | last OTA blocked/fail reason code for diagnostics (for example `battery_low`) |
 
 Note: `otaPendingVerify` is intentionally **not** a custom NVS key — that state is owned by the ESP-IDF OTA partition table per 8.2, to avoid the dual-source-of-truth problem from the original design.
@@ -413,6 +416,9 @@ Note: `otaPendingVerify` is intentionally **not** a custom NVS key — that stat
 | `otaChkFail` | `0` |
 | `otaBackoff` | `0` (no backoff in effect) |
 | `otaTarget` | `""` (no install pending) |
+| `otaWifiOk` | `0` (no stable cycles yet) |
+| `otaRebootFlg` | `false` (no fresh-install sentinel set) |
+| `otaLastTgt` | `""` (no successful install yet) |
 | `otaLastReason` | `""` (no last block/fail reason recorded yet) |
 
 `ghOtaInit()` should write these defaults back to NVS on first encounter (rather than re-deriving them from "not found" on every boot), mirroring the existing pattern used for `otaArmed`/`otaCycles` in [src/ota.cpp](src/ota.cpp) — verify that pattern (2.1) and follow it rather than introducing a second initialization style.
@@ -471,12 +477,16 @@ Recommended event names:
 7. ota_update_ok
 8. ota_update_fail
 
-Payload should include:
+Payload should include the following fields (the firmware implementation in [src/mqtt_client.cpp](src/mqtt_client.cpp) emits all of them, in this order):
 
-1. current_version
-2. target_version
-3. channel
-4. reason/result code
+1. `schema_version` (int) — set to `MQTT_SCHEMA_VERSION` (currently `1`); lets the backend evolve the schema without breaking older consumers
+2. `device` (string) — runtime device label (matches `OTA_LABEL` build flag)
+3. `event` (string) — one of the event names above (e.g. `ota_update_start`)
+4. `reason` (string) — reason / result code (see [§11.1](#111-reason-code-contract-firmware-synced))
+5. `current_version` (string) — running firmware version
+6. `target_version` (string) — target version when applicable, empty otherwise
+7. `channel` (string) — `stable` or `beta`
+8. `uptime_s` (uint) — uptime in seconds since the last boot, useful for staleness checks
 
 ### 11.1 Reason Code Contract (Firmware-Synced)
 
@@ -643,8 +653,8 @@ struct GhOtaTarget {
 
 void        ghOtaInit();                              // load NVS config (section 9)
 
-GhOtaCheck  ghOtaCheckForUpdate(GhOtaTarget& out);    // Check Gate + CheckRemote + FetchManifest (6.1 steps 2-5); out is populated with manifest data, no .bin bytes moved yet
-bool        ghOtaInstall(const GhOtaTarget& target);  // InstallEligibilityCheck + DownloadAndVerifyBinary + Install via esp_http_client + esp_ota_* (6.1 steps 6-8 / 8.1)
+GhOtaCheck  ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride = false);    // Check Gate + CheckRemote + FetchManifest (6.1 steps 2-5); out is populated with manifest data, no .bin bytes moved yet. `manualOverride=true` bypasses daily-interval and backoff gates (Telegram /otaupdate_check and /otaupdate_now use this).
+bool        ghOtaInstall(const GhOtaTarget& target, bool manualOverride = false);  // InstallEligibilityCheck + DownloadAndVerifyBinary + Install via esp_http_client + esp_ota_* (6.1 steps 6-8 / 8.1). `manualOverride=true` bypasses the install-time Wi-Fi stability gate (Telegram /otaupdate_now uses this); battery threshold and private-token rules remain enforced.
 bool        ghOtaHealthProbe();                       // short HTTPS probe (6.3, used by 8.3)
 void        ghOtaConfirmHealthIfPending();            // first-boot rollback gate (8.3)
 String      ghOtaStatusJson();                        // for /otastatus + MQTT (10.2/11)
@@ -769,7 +779,7 @@ This section is intentionally implementation-first. If another repository wants 
 1. Two OTA paths coexist:
    - local `ArduinoOTA` recovery window path ([src/ota.cpp](src/ota.cpp))
    - GitHub release OTA path with streamed install via `esp_http_client` + `esp_ota_*` ([src/gh_ota.cpp](src/gh_ota.cpp))
-2. GitHub OTA state is persisted in NVS with short keys under namespace `raised_garden` (see [include/gh_ota.h](include/gh_ota.h)).
+2. GitHub OTA state is persisted in NVS with short keys under namespace `birdnest_gh` (see [include/gh_ota.h](include/gh_ota.h)).
 3. Automatic flow at boot (when `otaAuto=true`):
    - load pending target and try install first
    - otherwise run remote check and install if update exists
