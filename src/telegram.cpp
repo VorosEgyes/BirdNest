@@ -242,8 +242,8 @@ static String buildHelpMessage() {
            "/reset_config - erase WiFi and stored credentials\n"
            "/debug0|1|2 - debug verbosity (minimal/normal/verbose)\n"
            "/otastatus - GitHub OTA status JSON\n"
-           "/otaupdate_check - check for new release\n"
-           "/otaupdate_now - check and install immediately\n"
+           "/otaupdate_check [--allow-local-build] - check for new release\n"
+           "/otaupdate_now [--allow-local-build] - check and install immediately\n"
            "/otaupdate_auto_on | /otaupdate_auto_off - auto-update toggle\n"
            "/otachannel stable|beta\n"
            "/otatoken_set <token> - set GitHub token (private repos)\n"
@@ -667,12 +667,25 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         }
         telegramSend(chatId.c_str(), "OTA channel set to: " + ghOtaGetChannel());
     }
-    else if (text == "/otaupdate_check" || text == "/otaupdate_now") {
+    else if (text == "/otaupdate_check" || text == "/otaupdate_now" ||
+             text.startsWith("/otaupdate_check ") || text.startsWith("/otaupdate_now ")) {
         if (!allowResetConfig) {
             telegramSendDebug("[CMD] skipped stale " + text + " from startup queue", 1);
             return;
         }
-        const bool isNow = (text == "/otaupdate_now");
+        // Parse optional --allow-local-build flag. Only meaningful for a
+        // 0.0.0-dev (pre-tag) build, where any tagged release would otherwise
+        // look like "update available" via SemVer precedence. See swarm
+        // review M-9 (v0.1.3).
+        const bool allowLocalBuild = (text.indexOf("--allow-local-build") >= 0);
+        if (strcmp(FW_VERSION, "0.0.0-dev") == 0 && !allowLocalBuild) {
+            telegramSend(chatId.c_str(),
+                "Local build (0.0.0-dev) detected. Refusing to check for updates "
+                "without explicit --allow-local-build flag. See /otastatus.local_build.");
+            telegramSendDebug("[CMD] refused " + text + " on 0.0.0-dev without --allow-local-build", 1);
+            return;
+        }
+        const bool isNow = text.startsWith("/otaupdate_now");
         telegramSend(chatId.c_str(),
             isNow ? "OTA check+install started. May take ~20 s..."
                   : "OTA check started. May take ~20 s...");

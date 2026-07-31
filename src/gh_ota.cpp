@@ -867,6 +867,11 @@ void ghOtaConfirmHealthIfPending() {
 String ghOtaStatusJson() {
     StaticJsonDocument<768> doc;
     doc["current_version"]   = FW_VERSION;
+    // Surface the local-build fallback explicitly so the operator can see that
+    // a "0.0.0-dev" FW_VERSION is a pre-release build and any SemVer-based
+    // comparison will report "update available" against any tagged release.
+    // See swarm review M-9 (v0.1.3).
+    doc["local_build"]       = (strcmp(FW_VERSION, "0.0.0-dev") == 0);
     doc["channel"]           = ghOtaGetChannel();
     doc["auto"]              = ghOtaIsAutoEnabled();
     doc["last_check"]        = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
