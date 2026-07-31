@@ -339,24 +339,6 @@ void setup() {
         enterDeepSleepSeconds(otaGetRecoverySleepSeconds(batteryVoltage));
     }
 
-    // GitHub OTA: init module, confirm post-install rollback health if needed,
-    // then run auto-check/install when enabled.
-    // Placed after the ArduinoOTA startup window to let the UDP/mDNS stack settle.
-    ghOtaInit();
-    ghOtaConfirmHealthIfPending();
-    if (ghOtaIsAutoEnabled() && !telegramIsMaintMode()) {
-        GhOtaTarget pendingTarget;
-        if (ghOtaGetPendingTarget(pendingTarget)) {
-            ghOtaInstall(pendingTarget);
-        } else {
-            GhOtaTarget target;
-            const GhOtaCheck check = ghOtaCheckForUpdate(target, false);
-            if (check == GhOtaCheck::UpdateAvailable) {
-                ghOtaInstall(target);
-            }
-        }
-    }
-
     syncTimeIfNeeded();
 
     // OTA server
@@ -383,6 +365,26 @@ void setup() {
     telegramProcessStartupMessages();
     mqttInit();
     mqttPublishNow("boot");
+
+    // GitHub OTA: init module, confirm post-install rollback health if needed,
+    // then run auto-check/install when enabled.
+    // MUST run after telegramInit() and mqttInit() so that the health-confirm
+    // events (mqttOtaEvent, telegramSendDebug) are actually delivered.
+    // See swarm review C-2 (v0.1.3).
+    ghOtaInit();
+    ghOtaConfirmHealthIfPending();
+    if (ghOtaIsAutoEnabled() && !telegramIsMaintMode()) {
+        GhOtaTarget pendingTarget;
+        if (ghOtaGetPendingTarget(pendingTarget)) {
+            ghOtaInstall(pendingTarget);
+        } else {
+            GhOtaTarget target;
+            const GhOtaCheck check = ghOtaCheckForUpdate(target, false);
+            if (check == GhOtaCheck::UpdateAvailable) {
+                ghOtaInstall(target);
+            }
+        }
+    }
 
     // Night-time check: if after sunset or before sunrise, sleep until sunrise (max 12 h)
     nightSleepIfNeeded();

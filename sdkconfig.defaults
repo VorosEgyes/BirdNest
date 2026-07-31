@@ -1,0 +1,12 @@
+# BirdNest ESP32-CAM — ESP-IDF sdkconfig defaults
+# Sourced by the ESP-IDF/arduino-esp32 build via PlatformIO.
+# Keep this file in sync with the doc §8.2.1 (OTA_Design.md).
+#
+# --- Anti-bricking foundation (swarm review C-1, v0.1.3) ---
+# Enables bootloader-level app rollback. The bootloader will boot the
+# previous app if the freshly-installed one fails to mark itself valid
+# within CONFIG_BOOTLOADER_APP_ROLLBACK_SPIFFS / OTA_DATA_PARTITION
+# timeout. This is the foundation of the §8.2 layered safety story;
+# the app-level confirmation in gh_ota.cpp (ghOtaConfirmHealthIfPending)
+# is the second layer. Both must be active for §8.3 to hold.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
