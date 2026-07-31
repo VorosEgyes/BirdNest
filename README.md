@@ -4,7 +4,7 @@ BirdNest is a battery-aware ESP32-CAM wildlife and bird nest monitoring project 
 
 **Single firmware binary model.** All cameras share one firmware build. Device-specific identity (label, OTA hostname, AP name) is stored in NVS at runtime, with a MAC-address-based fallback for first boot. Identity can be changed remotely via Telegram commands without reflashing.
 
-**GitHub OTA.** Starting from v0.1.0, firmware releases are published to GitHub automatically via CI. Each device can check for and install updates over HTTPS, with SHA-256 verification and optional A/B rollback. Updates are controlled via Telegram commands at runtime.
+**GitHub OTA.** Starting from v0.1.0, firmware releases are published to GitHub automatically via CI. Each device can check for and install updates over HTTPS, with SHA-256 verification and rollback support. Updates are controlled via Telegram commands at runtime. In the current firmware, the OTA install path is gated by network health and battery checks; weak RSSI alone no longer blocks installation, but the device still requires a live Wi-Fi connection and a valid OTA partition layout.
 
 ## Hardware Design Files (KiCad)
 
@@ -46,7 +46,12 @@ The hardware design assets are stored in `hardware/BirdNest_pcb/`.
 
 ## Hardware modification
 
-On the ESP32CAM the AMS1117 has been replaced with AP7361C-33ER-13 which consumes less. 
+The current board revision uses a more elaborate power-management section around the ESP32-CAM module than the original single-regulator layout. In the current KiCad schematic, the power path is implemented with a ME2188-based regulator stage together with battery switching, UVLO sensing, and a 2.5 V reference network for battery monitoring.
+
+Current hardware notes from the schematic:
+- The firmware still targets the standard AI-Thinker ESP32-CAM pinout described above.
+- The board includes battery-related nets such as BAT_RAW and BAT_MON, plus UVLO control/sense circuitry for low-voltage protection.
+- The schematic also routes the DS18B20 one-wire sensor and a PIR signal net in addition to the camera and power rails.
 
 ---
 
@@ -257,7 +262,7 @@ Starting from v0.1.0, every `v*` git tag triggers a CI build that publishes a si
 
 #### Partition table requirement
 
-GitHub OTA install requires an A/B OTA partition layout (`partitions_ota_4m.csv`). Devices previously flashed with `min_spiffs.csv` (single app partition) will run all GitHub OTA code normally but **install will be blocked** with reason `no_update_partition` until the device receives a full flash.
+GitHub OTA install requires an A/B OTA partition layout (`partitions_ota_4m.csv`). Devices previously flashed with `min_spiffs.csv` (single app partition) will run all GitHub OTA code normally but **install will be blocked** with reason `no_update_partition` until the device receives a full flash. This is why the first installation should be done over USB/serial for a new or previously single-partition device.
 
 | Scenario | ArduinoOTA upload | GitHub OTA install |
 |---|---|---|
