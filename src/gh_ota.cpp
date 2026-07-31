@@ -194,54 +194,134 @@ static void mqttOtaEvent(const String& eventType,
 struct ParsedSemVer {
     int major = 0, minor = 0, patch = 0;
     String prerelease;
+    String build;
     bool valid = false;
 };
+
+// SemVer 2.0.0 §9: numeric identifier is [0-9]+ with no leading zeros
+// (the single "0" is allowed).
+static bool isNumericIdent(const String& s) {
+    if (s.isEmpty()) return false;
+    if (s.length() > 1 && s.charAt(0) == '0') return false;
+    for (size_t i = 0; i < s.length(); ++i) {
+        if (s.charAt(i) < '0' || s.charAt(i) > '9') return false;
+    }
+    return true;
+}
+
+// SemVer 2.0.0 §9: alphanumeric identifier is [0-9A-Za-z-]+.
+static bool isAlphanumericIdent(const String& s) {
+    if (s.isEmpty()) return false;
+    for (size_t i = 0; i < s.length(); ++i) {
+        const char c = s.charAt(i);
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'A' && c <= 'Z') ||
+              (c >= 'a' && c <= 'z') ||
+              c == '-')) return false;
+    }
+    return true;
+}
+
+// Validate a single prerelease identifier per SemVer 2.0.0 §9.
+static bool isValidPrereleaseIdent(const String& s) {
+    return isNumericIdent(s) || isAlphanumericIdent(s);
+}
+
+// Validate every prerelease identifier in a dot-separated list.
+static bool isValidPrereleaseList(const String& prerelease) {
+    if (prerelease.isEmpty()) return true;  // no prerelease is valid
+    int start = 0;
+    while (true) {
+        const int dot = prerelease.indexOf('.', start);
+        const String tok = (dot < 0) ? prerelease.substring(start)
+                                     : prerelease.substring(start, dot);
+        if (!isValidPrereleaseIdent(tok)) return false;
+        if (dot < 0) return true;
+        start = dot + 1;
+    }
+}
 
 static ParsedSemVer parseSemVer(const String& versionIn) {
     ParsedSemVer out;
     String version = versionIn;
     version.trim();
+    if (version.isEmpty()) return out;
+    // S6: accept and strip a single optional leading "v" (SemVer 2.0.0 §2);
+    // any further leading "v" renders the version invalid.
     if (version.startsWith("v")) version = version.substring(1);
-    int dash = version.indexOf('-');
-    String core = (dash >= 0) ? version.substring(0, dash) : version;
-    if (dash >= 0) out.prerelease = version.substring(dash + 1);
-    int d1 = core.indexOf('.');
-    int d2 = core.indexOf('.', d1 + 1);
+    if (version.startsWith("v")) return out;
+    if (version.isEmpty()) return out;
+    // S1: split off build metadata ('+...') before parsing the prerelease.
+    const int plus = version.indexOf('+');
+    if (plus >= 0) {
+        out.build = version.substring(plus + 1);
+        version   = version.substring(0, plus);
+        if (out.build.isEmpty()) return out;  // "+" with no payload is invalid
+    }
+    // Parse core "MAJOR.MINOR.PATCH".
+    const int d1 = version.indexOf('.');
+    const int d2 = (d1 >= 0) ? version.indexOf('.', d1 + 1) : -1;
     if (d1 <= 0 || d2 <= d1 + 1) return out;
-    out.major = atoi(core.substring(0, d1).c_str());
-    out.minor = atoi(core.substring(d1 + 1, d2).c_str());
-    out.patch = atoi(core.substring(d2 + 1).c_str());
+    const String majorStr = version.substring(0, d1);
+    const String minorStr = version.substring(d1 + 1, d2);
+    const String patchStr = version.substring(d2 + 1);
+    // S2: strict numeric identifier check (no leading zeros, [0-9]+).
+    if (!isNumericIdent(majorStr) ||
+        !isNumericIdent(minorStr) ||
+        !isNumericIdent(patchStr)) return out;
+    out.major = majorStr.toInt();
+    out.minor = minorStr.toInt();
+    out.patch = patchStr.toInt();
+    // Parse prerelease ("-<dot-separated identifiers>").
+    const int dash = version.indexOf('-', d2 + 1);
+    if (dash >= 0) {
+        out.prerelease = version.substring(dash + 1);
+        // S4: every prerelease identifier must be non-empty and per §9.
+        if (!isValidPrereleaseList(out.prerelease)) return out;
+    }
     out.valid = true;
     return out;
 }
 
 static int comparePrereleaseToken(const String& a, const String& b) {
-    const bool aNum = a.length() > 0 && (a.toInt() != 0 || a == "0");
-    const bool bNum = b.length() > 0 && (b.toInt() != 0 || b == "0");
+    // S3: classify identifiers strictly per SemVer 2.0.0 §11.
+    const bool aNum = isNumericIdent(a);
+    const bool bNum = isNumericIdent(b);
     if (aNum && bNum) {
         const int ai = a.toInt(), bi = b.toInt();
-        return (ai == bi) ? 0 : ((ai > bi) ? 1 : -1);
+        if (ai == bi) return 0;
+        return (ai > bi) ? 1 : -1;
     }
-    if (aNum && !bNum) return -1;
+    if (aNum && !bNum) return -1;   // numeric identifiers have lower precedence
     if (!aNum && bNum) return 1;
     if (a == b) return 0;
+    // S7: ASCII lex comparison. The Arduino String operator> defers to
+    // strcmp, which is byte-wise unsigned — equivalent to SemVer §11's
+    // ASCII ordering for the [0-9A-Za-z-] subset.
     return (a > b) ? 1 : -1;
 }
 
 static int comparePrerelease(const String& a, const String& b) {
     if (a == b) return 0;
-    if (a.isEmpty() && !b.isEmpty()) return 1;
+    if (a.isEmpty() && !b.isEmpty()) return 1;   // no prerelease > any prerelease
     if (!a.isEmpty() && b.isEmpty()) return -1;
     int aStart = 0, bStart = 0;
     while (true) {
-        int aDot = a.indexOf('.', aStart);
-        int bDot = b.indexOf('.', bStart);
-        String aTok = (aDot < 0) ? a.substring(aStart) : a.substring(aStart, aDot);
-        String bTok = (bDot < 0) ? b.substring(bStart) : b.substring(bStart, bDot);
-        int cmp = comparePrereleaseToken(aTok, bTok);
+        const int aDot = a.indexOf('.', aStart);
+        const int bDot = b.indexOf('.', bStart);
+        const String aTok = (aDot < 0) ? a.substring(aStart)
+                                       : a.substring(aStart, aDot);
+        const String bTok = (bDot < 0) ? b.substring(bStart)
+                                       : b.substring(bStart, bDot);
+        // S4: empty tokens (e.g. "..1" or trailing dot) cannot occur here
+        // because parseSemVer already rejected them; we still treat them as
+        // lower precedence defensively.
+        if (aTok.isEmpty() && !bTok.isEmpty()) return -1;
+        if (!aTok.isEmpty() && bTok.isEmpty()) return 1;
+        const int cmp = comparePrereleaseToken(aTok, bTok);
         if (cmp != 0) return cmp;
         if (aDot < 0 && bDot < 0) return 0;
-        if (aDot < 0) return -1;
+        if (aDot < 0) return -1;   // a has fewer identifiers → lower precedence
         if (bDot < 0) return 1;
         aStart = aDot + 1;
         bStart = bDot + 1;
@@ -251,7 +331,13 @@ static int comparePrerelease(const String& a, const String& b) {
 static int semVerCompare(const String& aVersion, const String& bVersion) {
     ParsedSemVer a = parseSemVer(aVersion);
     ParsedSemVer b = parseSemVer(bVersion);
-    if (!a.valid && !b.valid) return 0;
+    // S5: if both are invalid, fall back to a raw-string lexical comparison
+    // (deterministic, never claims equality) so the caller can distinguish
+    // an unknown version from a known one.
+    if (!a.valid && !b.valid) {
+        if (aVersion == bVersion) return 0;
+        return (aVersion > bVersion) ? 1 : -1;
+    }
     if (!a.valid) return -1;
     if (!b.valid) return 1;
     if (a.major != b.major) return (a.major > b.major) ? 1 : -1;
