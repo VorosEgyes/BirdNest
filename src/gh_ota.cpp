@@ -34,6 +34,7 @@ static constexpr const char* OTA_REASON_MANIFEST_PARSE                    = "man
 static constexpr const char* OTA_REASON_MANIFEST_MISSING_FIELDS           = "manifest_missing_fields";
 static constexpr const char* OTA_REASON_BIN_ASSET_NOT_FOUND               = "bin_asset_not_found";
 static constexpr const char* OTA_REASON_BATTERY_LOW                       = "battery_low";
+static constexpr const char* OTA_REASON_BATTERY_UNKNOWN                  = "battery_unknown";
 static constexpr const char* OTA_REASON_TOKEN_MISSING_FOR_PRIVATE_TARGET  = "token_missing_for_private_target";
 static constexpr const char* OTA_REASON_NO_UPDATE_PARTITION               = "no_update_partition";
 static constexpr const char* OTA_REASON_MANIFEST_SHA256_INVALID           = "manifest_sha256_invalid";
@@ -623,7 +624,17 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
 
     const float battery   = batteryReadVoltage();
     const float threshold = (target.minBatteryV > GH_OTA_MIN_INSTALL_BATTERY_V) ? target.minBatteryV : GH_OTA_MIN_INSTALL_BATTERY_V;
-    if (battery > 0.0f && battery < threshold) {
+    // Fail-safe battery gate. A non-positive read (broken ADC, disconnected
+    // voltage divider, miscalibrated sensor) MUST block install — without this
+    // the device could brick mid-flash on a dying battery. See swarm review
+    // M-10 (v0.1.3).
+    if (battery <= 0.0f) {
+        savePendingTarget(target, "battery_unknown");
+        mqttOtaEvent("ota_install_blocked", OTA_REASON_BATTERY_UNKNOWN, target.version);
+        telegramSendDebug("[OTA][WARN] install blocked: battery reading invalid (sensor/ADC fault), threshold=" + String(threshold, 2) + "V", 0);
+        return false;
+    }
+    if (battery < threshold) {
         savePendingTarget(target, "battery_low");
         mqttOtaEvent("ota_install_blocked", OTA_REASON_BATTERY_LOW, target.version);
         telegramSendDebug("[OTA][WARN] install blocked: battery " + String(battery, 2) + "V below " + String(threshold, 2) + "V", 1);
