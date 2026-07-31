@@ -431,11 +431,10 @@ Note: `otaPendingVerify` is intentionally **not** a custom NVS key — that stat
 2. /otaupdate_now
 3. /otaupdate_auto_on   *(default OFF — see 10.2.2; the operator must explicitly enable auto-update)*
 4. /otaupdate_auto_off
-5. /otachannel stable
-6. /otachannel beta
-7. /otatoken_set <token>
-8. /otatoken_clear
-9. /otastatus
+5. /otachannel <stable|beta>   (inline arg; sets the channel persistent in NVS)
+6. /otatoken_set <token>
+7. /otatoken_clear
+8. /otastatus
 
 > **Note (v0.1.3):** auto-update is **OFF by default**. A release cut does NOT trigger auto-rollout; the operator must run `/otaupdate_auto_on` per camera (see `docs/RELEASE.md` §3 stage 3). The same note is rendered at the top of the `/status` JSON output and at the bottom of the `/help` text.
 
@@ -744,7 +743,14 @@ In [src/main.cpp](src/main.cpp):
 1. Flash firmware with OTA GitHub feature enabled.
 2. Set channel (stable or beta).
 3. Set GitHub token using Telegram command — confirm the command message is auto-deleted from chat (12.4).
-4. Trigger /otaupdate_check and verify diagnostics.
+4. Trigger /otaupdate_check and act on the response (see decision tree below).
+
+**First-check decision tree (v0.1.3):**
+
+- `no_update` → the running firmware is already at or above the latest release on the channel. Steady-state; no further action.
+- `skipped` (network/time gate) → check the [operator-view table](OTA_Design.md#1021-reason-codes-operator-view-v013) for the reason code (commonly `wifi_unstable` or `manifest_http`). Retry from `/otaupdate_check` once the underlying condition clears — do not chase with repeated `/otaupdate_now`.
+- `failed` → inspect `$reason` in the response. For `github_releases_http`, `manifest_http`, `manifest_parse`: the GitHub side is the problem; wait an hour and retry. For `battery_low` or `battery_unknown`: re-check after sun or after fixing the sensor. For `token_missing_for_private_target`: run `/otatoken_set <token>` and retry. For `sha256_mismatch` or `manifest_sha256_invalid`: escalate — do not retry, the release is malformed.
+- `update_found` (printed only when `/otaupdate_now` is used) → the install proceeds immediately; watch for the `health_confirmed` event in Telegram/MQTT to confirm the new image is valid.
 
 ### 17.2 Transition to Public Repo
 
