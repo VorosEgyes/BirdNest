@@ -423,13 +423,15 @@ Note: `otaPendingVerify` is intentionally **not** a custom NVS key — that stat
 
 1. /otaupdate_check
 2. /otaupdate_now
-3. /otaupdate_auto_on
+3. /otaupdate_auto_on   *(default OFF — see 10.2.2; the operator must explicitly enable auto-update)*
 4. /otaupdate_auto_off
 5. /otachannel stable
 6. /otachannel beta
 7. /otatoken_set <token>
 8. /otatoken_clear
 9. /otastatus
+
+> **Note (v0.1.3):** auto-update is **OFF by default**. A release cut does NOT trigger auto-rollout; the operator must run `/otaupdate_auto_on` per camera (see `docs/RELEASE.md` §3 stage 3). The same note is rendered at the top of the `/status` JSON output and at the bottom of the `/help` text.
 
 ### 10.2 Expected Behavior
 
@@ -443,6 +445,16 @@ Note: `otaPendingVerify` is intentionally **not** a custom NVS key — that stat
    - `pending_target`: pending target version or null.
    - `pending_reason`: pending reason if present; otherwise fallback to `last_reason`.
    - `last_reason`: last blocked/fail reason persisted independently in NVS (`otaLastReason`) so diagnostics remain available even when `otaTarget` is empty/unreadable.
+
+### 10.2.2 Auto-update default OFF (v0.1.3)
+
+Auto-update is **OFF by default** on every fresh boot, factory reset, and OTA update. The runtime flag `otaAuto` is only set to `true` when the operator explicitly sends `/otaupdate_auto_on`. This is a deliberate safety policy: a release cut on GitHub does NOT silently roll out to the fleet. The operator must:
+
+1. Wait for the `boot` MQTT event on the channel assigned to each camera.
+2. Confirm the new `current_version` field via `/otastatus` (or the JSON `current_version` field).
+3. Run `/otaupdate_auto_on` on each camera, one at a time, after the pilot cycle (see `docs/RELEASE.md` §3 stage 3).
+
+The `/status` JSON output starts with a `local_build` boolean and includes the `auto` field. The Telegram `/help` text ends with the same explicit reminder. Both are operator-facing guards against the assumption that a tagged release implies auto-distribution.
 
 ## 11. MQTT Event Model
 
