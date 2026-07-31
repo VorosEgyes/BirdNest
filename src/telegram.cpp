@@ -13,6 +13,10 @@
 #include <UniversalTelegramBot.h>
 #include <Arduino.h>
 #include <Preferences.h>
+
+extern uint8_t getLastSleepStage();
+extern uint32_t getPreviousBootStage();
+extern uint32_t getCurrentBootStage();
 #include <esp_ota_ops.h>
 #include <esp_system.h>
 
@@ -35,9 +39,11 @@ static unsigned long s_lastMsgPersistMs = 0;
 enum class PendingOtaAction : uint8_t { None, Check, Install };
 static PendingOtaAction s_pendingOtaAction = PendingOtaAction::None;
 static String           s_pendingOtaChatId;
+static uint32_t         s_pendingSleepSec = 0;
 typedef void (*PhotoCallback)(const char*);
 static PhotoCallback s_photoCb       = nullptr;
 static SleepCallback s_sleepCb       = nullptr;
+static const char* resetReasonName(esp_reset_reason_t reason);
 
 static const uint16_t STARTUP_MSG_PROCESS_LIMIT = 10;
 static const unsigned long STARTUP_MSG_TIME_LIMIT_MS = 5000UL;
@@ -293,6 +299,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         String calState = batteryIsCalibrationEnabled() ? "ON" : "OFF";
         String deviceLabel = String(getDeviceLabel());
         String otaHost = String(getOtaHostname());
+        const String otaCrashStage = ghOtaConsumeCrashStage();
         telegramSend(chatId.c_str(),
             "BirdNest online\nDevice: " + deviceLabel +
             "\nIP: " + WiFi.localIP().toString() +
@@ -307,6 +314,13 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "\nGitHub OTA: " + String(ghOtaIsAutoEnabled() ? "AUTO" : "MANUAL") +
             " / " + ghOtaGetChannel() +
             " / token=" + String(ghOtaHasToken() ? "SET" : "EMPTY") +
+            "\nUptime: " + String(millis() / 1000UL) + " s" +
+            "\nReset reason: " + String(resetReasonName(esp_reset_reason())) +
+            "\nBoot stage: " + String(getPreviousBootStage()) +
+            " -> " + String(getCurrentBootStage()) +
+            "\nOTA crash stage: " + (otaCrashStage.isEmpty() ? "none" : otaCrashStage) +
+            "\nSleep stage: " + String(getLastSleepStage()) +
+            "\nSleep: " + String(s_sleepSec) + " s" +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
             "\nOTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") +
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
@@ -346,15 +360,19 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     else if (text == "/maint_off") {
         s_maintMode = false;
         saveRuntimeConfig();
-        telegramSend(chatId.c_str(), "Maintenance mode OFF - deep sleep active.");
+        if (s_sleepSec > 0) {
+            telegramSend(chatId.c_str(),
+                "Maintenance mode OFF - entering deep sleep now.");
+        } else {
+            telegramSend(chatId.c_str(),
+                "Maintenance mode OFF, but deep sleep is disabled. Use /sleepXX to enable it.");
+        }
         telegramSendDebug("[CMD] maintenance mode disabled by chat " + chatId, 1);
 
         // Live /maint_off should return to power-saving mode immediately.
         // Do not force sleep while replaying queued startup messages.
         if (allowResetConfig && s_sleepCb && s_sleepSec > 0) {
-            telegramSendDebug("[CMD] entering deep sleep after /maint_off", 1);
-            delay(200);
-            s_sleepCb(s_sleepSec);
+            s_pendingSleepSec = s_sleepSec;
         }
     }
     else if (text == "/photo") {
@@ -396,8 +414,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
                 // Only execute immediate sleep for live commands.
                 // Startup queue replay must not force the device back to sleep.
                 if (allowResetConfig && s_sleepCb) {
-                    delay(200);
-                    s_sleepCb(s_sleepSec);
+                    s_pendingSleepSec = s_sleepSec;
                 }
             }
         } else {
@@ -434,7 +451,6 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     }
     else if (text == "/bootstrap_prepare") {
         s_maintMode = true;
-        s_sleepSec = 0;
         saveRuntimeConfig();
         WiFi.setSleep(false);
         otaArmRecovery();
@@ -444,7 +460,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
 
         String msgOut = "Bootstrap mode armed:\n"
                         "- maintenance=ON\n"
-                        "- sleep=OFF\n"
+                        "- sleep interval=PRESERVED\n"
                         "- wifi modem sleep=OFF\n"
                         "- ota recovery=ARMED\n\n" + preflight;
 
@@ -919,6 +935,13 @@ void telegramLoop() {
 }
 
 void telegramRunDeferredActions() {
+    if (s_pendingSleepSec > 0) {
+        const uint32_t sleepSec = s_pendingSleepSec;
+        s_pendingSleepSec = 0;
+        s_sleepCb(sleepSec);
+        return;
+    }
+
     if (s_pendingOtaAction == PendingOtaAction::None) return;
 
     const PendingOtaAction action = s_pendingOtaAction;

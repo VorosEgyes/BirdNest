@@ -748,6 +748,13 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         return GhOtaCheck::Skipped;
     }
 
+    if (!manualOverride && now > 100000) {
+        const uint32_t backoffUntil = nvsReadU32(GH_OTA_KEY_BACKOFF, 0);
+        const uint32_t lastCheck    = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
+        if (backoffUntil > static_cast<uint32_t>(now)) return GhOtaCheck::Skipped;
+        if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
+    }
+
     if (!manualOverride) {
         if (!ghOtaHealthProbe()) {
             markWifiStabilityFailure(now);
@@ -757,13 +764,6 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     }
 
     markWifiStabilitySuccess();
-
-    if (!manualOverride && now > 100000) {
-        const uint32_t backoffUntil = nvsReadU32(GH_OTA_KEY_BACKOFF, 0);
-        const uint32_t lastCheck    = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
-        if (backoffUntil > static_cast<uint32_t>(now)) return GhOtaCheck::Skipped;
-        if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
-    }
 
     // UniversalTelegramBot keeps its TLS client alive after command replies.
     // Release those buffers before opening a second TLS session to GitHub.
