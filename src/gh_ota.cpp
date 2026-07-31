@@ -810,6 +810,11 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
 
     err = esp_ota_end(otaHandle);
     if (err != ESP_OK) {
+        // ESP-IDF docs: when esp_ota_end fails, the handle must be aborted to
+        // release the flash write-protected state. Without this, the next
+        // esp_ota_begin on the same partition can return ESP_ERR_INVALID_STATE.
+        // See swarm review M-11 (v0.1.3).
+        esp_ota_abort(otaHandle);
         savePendingTarget(target, "ota_finish_failed");
         mqttOtaEvent("ota_update_fail", OTA_REASON_OTA_FINISH_FAILED, target.version);
         telegramSendDebug("[OTA][ERR] esp_ota_end failed, err=" + String(static_cast<int>(err)), 0);
