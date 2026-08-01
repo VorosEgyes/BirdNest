@@ -47,13 +47,15 @@ static String buildPhotoCaption() {
     String tempStr = "N/A";
     if (tempC > -100.0f) {
         const int tempRounded = static_cast<int>(tempC >= 0.0f ? (tempC + 0.5f) : (tempC - 0.5f));
-        tempStr = String(tempRounded) + " C";
+        tempStr = String(tempRounded) + " °C";
     }
 
     String battVStr = String(batteryReadVoltage(), 2);
     battVStr.replace(".", ",");
 
-    return label + ", " + tempStr + ", " + battVStr + "V (" + String(battPct) + "%)";
+    return "📷 " + label +
+           "\n🌡️ " + tempStr +
+           "\n🔋 " + battVStr + " V (" + String(battPct) + "%)";
 }
 
 static void setLastPhotoError(const String& reason) {
