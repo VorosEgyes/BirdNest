@@ -523,7 +523,8 @@ static bool ghNativeHttpGet(const String& url,
                             const String& token,
                             const char* accept,
                             NativeHttpBody& body,
-                            int& outCode) {
+                            int& outCode,
+                            bool pinCert = true) {
     outCode = -1;
     s_lastNativeHttpError = ESP_OK;
     s_lastNativeHttpErrno = 0;
@@ -532,7 +533,9 @@ static bool ghNativeHttpGet(const String& url,
     esp_http_client_config_t config = {};
     config.url = url.c_str();
     config.user_agent = "BirdNest-OTA";
-    config.cert_pem = GH_OTA_ROOT_CA;
+    // browser_download_url/asset URLs 302-redirect github.com -> objects.githubusercontent.com,
+    // a different CA chain; pinning breaks the redirect's TLS handshake, so skip pinning for those.
+    config.cert_pem = pinCert ? GH_OTA_ROOT_CA : nullptr;
     config.method = HTTP_METHOD_GET;
     config.timeout_ms = GH_OTA_HTTP_TIMEOUT_MS;
     config.disable_auto_redirect = false;
@@ -564,14 +567,15 @@ static bool ghNativeHttpGet(const String& url,
 }
 
 static bool ghHttpGet(const String& url, const String& token, bool octetAccept,
-                      String& outBody, int& outCode) {
+                      String& outBody, int& outCode, bool pinCert = true) {
     NativeHttpBody body(4096);
     const bool ok = ghNativeHttpGet(
         url,
         token,
         octetAccept ? "application/octet-stream" : "application/vnd.github+json",
         body,
-        outCode);
+        outCode,
+        pinCert);
     outBody = "";
     if (body.data() && body.length() > 0) {
         outBody.concat(body.data(), static_cast<unsigned int>(body.length()));
@@ -849,9 +853,11 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     const bool manifestOctet = !token.isEmpty() && !bestManifestUrl.isEmpty();
     bool manifestOk = false;
     setOtaRuntimeStage(OtaRuntimeStage::ManifestHttp);
+    // Not pinned: asset URLs (both API and browser_download_url forms) redirect to
+    // objects.githubusercontent.com, whose cert chain differs from github.com/api.github.com.
     for (uint8_t attempt = 0; attempt < GH_OTA_MAX_CHECK_ATTEMPTS; ++attempt) {
         manifestBody = ""; manifestCode = -1;
-        if (ghHttpGet(manifestUrl, token, manifestOctet, manifestBody, manifestCode)) { manifestOk = true; break; }
+        if (ghHttpGet(manifestUrl, token, manifestOctet, manifestBody, manifestCode, false)) { manifestOk = true; break; }
         if (attempt + 1 < GH_OTA_MAX_CHECK_ATTEMPTS) delay(GH_OTA_CHECK_RETRY_DELAY_MS);
     }
     if (!manifestOk) {
