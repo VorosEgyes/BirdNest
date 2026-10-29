@@ -9,7 +9,9 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <esp_app_format.h>
+#include <esp_attr.h>
 #include <esp_err.h>
+#include <esp_heap_caps.h>
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -18,6 +20,82 @@
 #include <time.h>
 
 static bool s_ghOtaInitialized = false;
+
+enum class OtaRuntimeStage : uint32_t {
+    Idle = 0,
+    CheckEntry,
+    TelegramClose,
+    MqttStart,
+    TokenAndJsonAlloc,
+    ReleasesHttp,
+    ReleasesParse,
+    ReleaseScan,
+    ManifestHttp,
+    ManifestParse,
+    BinaryScan,
+    SavePending
+};
+
+static constexpr uint32_t GH_OTA_RUNTIME_MAGIC = 0x47484F54UL;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeMagic;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeStage;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreeHeap;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeLargestBlock;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreePsram;
+
+static void setOtaRuntimeStage(OtaRuntimeStage stage) {
+    s_otaRuntimeMagic = GH_OTA_RUNTIME_MAGIC;
+    s_otaRuntimeStage = static_cast<uint32_t>(stage);
+    s_otaRuntimeFreeHeap = static_cast<uint32_t>(
+        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    s_otaRuntimeLargestBlock = static_cast<uint32_t>(
+        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    s_otaRuntimeFreePsram = static_cast<uint32_t>(
+        heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+}
+
+class OtaRuntimeStageGuard {
+public:
+    OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::CheckEntry); }
+    ~OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::Idle); }
+};
+
+static const char* otaRuntimeStageName(OtaRuntimeStage stage) {
+    switch (stage) {
+        case OtaRuntimeStage::CheckEntry:       return "check_entry";
+        case OtaRuntimeStage::TelegramClose:    return "telegram_close";
+        case OtaRuntimeStage::MqttStart:        return "mqtt_start";
+        case OtaRuntimeStage::TokenAndJsonAlloc:return "token_json_alloc";
+        case OtaRuntimeStage::ReleasesHttp:     return "releases_http";
+        case OtaRuntimeStage::ReleasesParse:    return "releases_parse";
+        case OtaRuntimeStage::ReleaseScan:      return "release_scan";
+        case OtaRuntimeStage::ManifestHttp:     return "manifest_http";
+        case OtaRuntimeStage::ManifestParse:    return "manifest_parse";
+        case OtaRuntimeStage::BinaryScan:       return "binary_scan";
+        case OtaRuntimeStage::SavePending:      return "save_pending";
+        default:                                return "unknown";
+    }
+}
+
+struct PsramJsonAllocator {
+    void* allocate(size_t size) {
+        void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        return ptr ? ptr : heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+
+    void deallocate(void* ptr) {
+        heap_caps_free(ptr);
+    }
+
+    void* reallocate(void* ptr, size_t newSize) {
+        void* resized = heap_caps_realloc(ptr, newSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        return resized ? resized : heap_caps_realloc(ptr, newSize, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    }
+};
+
+using ReleasesJsonDocument = BasicJsonDocument<PsramJsonAllocator>;
+static esp_err_t s_lastNativeHttpError = ESP_OK;
+static int s_lastNativeHttpErrno = 0;
 
 static constexpr uint32_t GH_OTA_DAILY_CHECK_SEC         = 86400UL;
 static constexpr float    GH_OTA_MIN_INSTALL_BATTERY_V   = 3.60f;
@@ -34,6 +112,7 @@ static constexpr const char* OTA_REASON_MANIFEST_PARSE                    = "man
 static constexpr const char* OTA_REASON_MANIFEST_MISSING_FIELDS           = "manifest_missing_fields";
 static constexpr const char* OTA_REASON_BIN_ASSET_NOT_FOUND               = "bin_asset_not_found";
 static constexpr const char* OTA_REASON_BATTERY_LOW                       = "battery_low";
+static constexpr const char* OTA_REASON_BATTERY_UNKNOWN                  = "battery_unknown";
 static constexpr const char* OTA_REASON_TOKEN_MISSING_FOR_PRIVATE_TARGET  = "token_missing_for_private_target";
 static constexpr const char* OTA_REASON_NO_UPDATE_PARTITION               = "no_update_partition";
 static constexpr const char* OTA_REASON_MANIFEST_SHA256_INVALID           = "manifest_sha256_invalid";
@@ -49,6 +128,26 @@ static constexpr const char* OTA_REASON_HEALTH_CONFIRMED_DEGRADED         = "hea
 static constexpr const char* OTA_REASON_HEALTH_PROBE_FAILED               = "health_probe_failed";
 static constexpr const char* GH_OTA_KEY_REBOOT_FLG                       = "otaRebootFlg";
 static constexpr const char* GH_OTA_KEY_LAST_TGT                         = "otaLastTgt";
+
+// USERTrust ECC Certification Authority, trust anchor for GitHub's current
+// Sectigo E36/E46 certificate chain. SHA-256: 4F:F4:60:D5:...:D2:A9:AD:7A.
+static const char GH_OTA_ROOT_CA[] PROGMEM = R"PEM(-----BEGIN CERTIFICATE-----
+MIICjzCCAhWgAwIBAgIQXIuZxVqUxdJxVt7NiYDMJjAKBggqhkjOPQQDAzCBiDEL
+MAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNl
+eSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMT
+JVVTRVJUcnVzdCBFQ0MgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAwMjAx
+MDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNVBAgT
+Ck5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVUaGUg
+VVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBFQ0MgQ2VydGlm
+aWNhdGlvbiBBdXRob3JpdHkwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQarFRaqflo
+I+d61SRvU8Za2EurxtW20eZzca7dnNYMYf3boIkDuAUU7FfO7l0/4iGzzvfUinng
+o4N+LZfQYcTxmdwlkWOrfzCjtHDix6EznPO/LlxTsV+zfTJ/ijTjeXmjQjBAMB0G
+A1UdDgQWBBQ64QmG1M8ZwpZ2dEl23OA1xmNjmjAOBgNVHQ8BAf8EBAMCAQYwDwYD
+VR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAwNoADBlAjA2Z6EWCNzklwBBHU6+4WMB
+zzuqQhFkoJ2UOQIReVx7Hfpkue4WQrO/isIJxOzksU0CMQDpKmFHjFJKS04YcPbW
+RNZu9YO6bVi9JNlWSOrvxKJGgYhqOkbRqZtNyWHa0V1Xahg=
+-----END CERTIFICATE-----
+)PEM";
 
 // Keep download buffer in static storage to avoid large stack usage.
 static uint8_t s_otaDownloadBuf[4096];
@@ -193,54 +292,134 @@ static void mqttOtaEvent(const String& eventType,
 struct ParsedSemVer {
     int major = 0, minor = 0, patch = 0;
     String prerelease;
+    String build;
     bool valid = false;
 };
+
+// SemVer 2.0.0 §9: numeric identifier is [0-9]+ with no leading zeros
+// (the single "0" is allowed).
+static bool isNumericIdent(const String& s) {
+    if (s.isEmpty()) return false;
+    if (s.length() > 1 && s.charAt(0) == '0') return false;
+    for (size_t i = 0; i < s.length(); ++i) {
+        if (s.charAt(i) < '0' || s.charAt(i) > '9') return false;
+    }
+    return true;
+}
+
+// SemVer 2.0.0 §9: alphanumeric identifier is [0-9A-Za-z-]+.
+static bool isAlphanumericIdent(const String& s) {
+    if (s.isEmpty()) return false;
+    for (size_t i = 0; i < s.length(); ++i) {
+        const char c = s.charAt(i);
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'A' && c <= 'Z') ||
+              (c >= 'a' && c <= 'z') ||
+              c == '-')) return false;
+    }
+    return true;
+}
+
+// Validate a single prerelease identifier per SemVer 2.0.0 §9.
+static bool isValidPrereleaseIdent(const String& s) {
+    return isNumericIdent(s) || isAlphanumericIdent(s);
+}
+
+// Validate every prerelease identifier in a dot-separated list.
+static bool isValidPrereleaseList(const String& prerelease) {
+    if (prerelease.isEmpty()) return true;  // no prerelease is valid
+    int start = 0;
+    while (true) {
+        const int dot = prerelease.indexOf('.', start);
+        const String tok = (dot < 0) ? prerelease.substring(start)
+                                     : prerelease.substring(start, dot);
+        if (!isValidPrereleaseIdent(tok)) return false;
+        if (dot < 0) return true;
+        start = dot + 1;
+    }
+}
 
 static ParsedSemVer parseSemVer(const String& versionIn) {
     ParsedSemVer out;
     String version = versionIn;
     version.trim();
+    if (version.isEmpty()) return out;
+    // S6: accept and strip a single optional leading "v" (SemVer 2.0.0 §2);
+    // any further leading "v" renders the version invalid.
     if (version.startsWith("v")) version = version.substring(1);
-    int dash = version.indexOf('-');
-    String core = (dash >= 0) ? version.substring(0, dash) : version;
-    if (dash >= 0) out.prerelease = version.substring(dash + 1);
-    int d1 = core.indexOf('.');
-    int d2 = core.indexOf('.', d1 + 1);
+    if (version.startsWith("v")) return out;
+    if (version.isEmpty()) return out;
+    // S1: split off build metadata ('+...') before parsing the prerelease.
+    const int plus = version.indexOf('+');
+    if (plus >= 0) {
+        out.build = version.substring(plus + 1);
+        version   = version.substring(0, plus);
+        if (out.build.isEmpty()) return out;  // "+" with no payload is invalid
+    }
+    // Parse core "MAJOR.MINOR.PATCH".
+    const int d1 = version.indexOf('.');
+    const int d2 = (d1 >= 0) ? version.indexOf('.', d1 + 1) : -1;
     if (d1 <= 0 || d2 <= d1 + 1) return out;
-    out.major = atoi(core.substring(0, d1).c_str());
-    out.minor = atoi(core.substring(d1 + 1, d2).c_str());
-    out.patch = atoi(core.substring(d2 + 1).c_str());
+    const String majorStr = version.substring(0, d1);
+    const String minorStr = version.substring(d1 + 1, d2);
+    const String patchStr = version.substring(d2 + 1);
+    // S2: strict numeric identifier check (no leading zeros, [0-9]+).
+    if (!isNumericIdent(majorStr) ||
+        !isNumericIdent(minorStr) ||
+        !isNumericIdent(patchStr)) return out;
+    out.major = majorStr.toInt();
+    out.minor = minorStr.toInt();
+    out.patch = patchStr.toInt();
+    // Parse prerelease ("-<dot-separated identifiers>").
+    const int dash = version.indexOf('-', d2 + 1);
+    if (dash >= 0) {
+        out.prerelease = version.substring(dash + 1);
+        // S4: every prerelease identifier must be non-empty and per §9.
+        if (!isValidPrereleaseList(out.prerelease)) return out;
+    }
     out.valid = true;
     return out;
 }
 
 static int comparePrereleaseToken(const String& a, const String& b) {
-    const bool aNum = a.length() > 0 && (a.toInt() != 0 || a == "0");
-    const bool bNum = b.length() > 0 && (b.toInt() != 0 || b == "0");
+    // S3: classify identifiers strictly per SemVer 2.0.0 §11.
+    const bool aNum = isNumericIdent(a);
+    const bool bNum = isNumericIdent(b);
     if (aNum && bNum) {
         const int ai = a.toInt(), bi = b.toInt();
-        return (ai == bi) ? 0 : ((ai > bi) ? 1 : -1);
+        if (ai == bi) return 0;
+        return (ai > bi) ? 1 : -1;
     }
-    if (aNum && !bNum) return -1;
+    if (aNum && !bNum) return -1;   // numeric identifiers have lower precedence
     if (!aNum && bNum) return 1;
     if (a == b) return 0;
+    // S7: ASCII lex comparison. The Arduino String operator> defers to
+    // strcmp, which is byte-wise unsigned — equivalent to SemVer §11's
+    // ASCII ordering for the [0-9A-Za-z-] subset.
     return (a > b) ? 1 : -1;
 }
 
 static int comparePrerelease(const String& a, const String& b) {
     if (a == b) return 0;
-    if (a.isEmpty() && !b.isEmpty()) return 1;
+    if (a.isEmpty() && !b.isEmpty()) return 1;   // no prerelease > any prerelease
     if (!a.isEmpty() && b.isEmpty()) return -1;
     int aStart = 0, bStart = 0;
     while (true) {
-        int aDot = a.indexOf('.', aStart);
-        int bDot = b.indexOf('.', bStart);
-        String aTok = (aDot < 0) ? a.substring(aStart) : a.substring(aStart, aDot);
-        String bTok = (bDot < 0) ? b.substring(bStart) : b.substring(bStart, bDot);
-        int cmp = comparePrereleaseToken(aTok, bTok);
+        const int aDot = a.indexOf('.', aStart);
+        const int bDot = b.indexOf('.', bStart);
+        const String aTok = (aDot < 0) ? a.substring(aStart)
+                                       : a.substring(aStart, aDot);
+        const String bTok = (bDot < 0) ? b.substring(bStart)
+                                       : b.substring(bStart, bDot);
+        // S4: empty tokens (e.g. "..1" or trailing dot) cannot occur here
+        // because parseSemVer already rejected them; we still treat them as
+        // lower precedence defensively.
+        if (aTok.isEmpty() && !bTok.isEmpty()) return -1;
+        if (!aTok.isEmpty() && bTok.isEmpty()) return 1;
+        const int cmp = comparePrereleaseToken(aTok, bTok);
         if (cmp != 0) return cmp;
         if (aDot < 0 && bDot < 0) return 0;
-        if (aDot < 0) return -1;
+        if (aDot < 0) return -1;   // a has fewer identifiers → lower precedence
         if (bDot < 0) return 1;
         aStart = aDot + 1;
         bStart = bDot + 1;
@@ -250,7 +429,13 @@ static int comparePrerelease(const String& a, const String& b) {
 static int semVerCompare(const String& aVersion, const String& bVersion) {
     ParsedSemVer a = parseSemVer(aVersion);
     ParsedSemVer b = parseSemVer(bVersion);
-    if (!a.valid && !b.valid) return 0;
+    // S5: if both are invalid, fall back to a raw-string lexical comparison
+    // (deterministic, never claims equality) so the caller can distinguish
+    // an unknown version from a known one.
+    if (!a.valid && !b.valid) {
+        if (aVersion == bVersion) return 0;
+        return (aVersion > bVersion) ? 1 : -1;
+    }
     if (!a.valid) return -1;
     if (!b.valid) return 1;
     if (a.major != b.major) return (a.major > b.major) ? 1 : -1;
@@ -274,45 +459,156 @@ static uint32_t wifiBackoffSeconds(uint8_t wifiFailStreak) {
 // HTTP helpers
 // ============================================================
 
+class NativeHttpBody {
+public:
+    explicit NativeHttpBody(size_t capacity)
+        : m_capacity(capacity) {
+        m_data = static_cast<char*>(
+            heap_caps_malloc(capacity + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!m_data) {
+            m_data = static_cast<char*>(
+                heap_caps_malloc(capacity + 1, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+        }
+        reset();
+    }
+
+    ~NativeHttpBody() {
+        heap_caps_free(m_data);
+    }
+
+    bool append(const char* data, size_t length) {
+        if (!m_data || m_length + length > m_capacity) {
+            m_overflow = true;
+            return false;
+        }
+        memcpy(m_data + m_length, data, length);
+        m_length += length;
+        m_data[m_length] = '\0';
+        return true;
+    }
+
+    void reset() {
+        m_length = 0;
+        m_overflow = false;
+        if (m_data) m_data[0] = '\0';
+    }
+
+    bool valid() const { return m_data != nullptr && !m_overflow; }
+    const char* data() const { return m_data; }
+    size_t length() const { return m_length; }
+
+private:
+    char* m_data = nullptr;
+    size_t m_capacity = 0;
+    size_t m_length = 0;
+    bool m_overflow = false;
+};
+
+static esp_err_t ghNativeHttpEvent(esp_http_client_event_t* event) {
+    NativeHttpBody* body = static_cast<NativeHttpBody*>(event->user_data);
+    if (!body) return ESP_FAIL;
+
+    if (event->event_id == HTTP_EVENT_ON_CONNECTED) {
+        body->reset();
+    } else if (event->event_id == HTTP_EVENT_ON_DATA && event->data_len > 0) {
+        if (!body->append(static_cast<const char*>(event->data),
+                          static_cast<size_t>(event->data_len))) {
+            return ESP_FAIL;
+        }
+    }
+    return ESP_OK;
+}
+
+static bool ghNativeHttpGet(const String& url,
+                            const String& token,
+                            const char* accept,
+                            NativeHttpBody& body,
+                            int& outCode,
+                            bool pinCert = true) {
+    outCode = -1;
+    s_lastNativeHttpError = ESP_OK;
+    s_lastNativeHttpErrno = 0;
+    if (!body.valid()) return false;
+
+    esp_http_client_config_t config = {};
+    config.url = url.c_str();
+    config.user_agent = "BirdNest-OTA";
+    // browser_download_url/asset URLs 302-redirect github.com -> objects.githubusercontent.com,
+    // a different CA chain; pinning breaks the redirect's TLS handshake, so skip pinning for those.
+    config.cert_pem = pinCert ? GH_OTA_ROOT_CA : nullptr;
+    config.method = HTTP_METHOD_GET;
+    config.timeout_ms = GH_OTA_HTTP_TIMEOUT_MS;
+    config.disable_auto_redirect = false;
+    config.max_redirection_count = 5;
+    config.event_handler = ghNativeHttpEvent;
+    config.transport_type = HTTP_TRANSPORT_OVER_SSL;
+    config.buffer_size = 1024;
+    config.buffer_size_tx = 1024;
+    config.user_data = &body;
+    config.skip_cert_common_name_check = false;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) return false;
+
+    esp_http_client_set_header(client, "X-GitHub-Api-Version", "2022-11-28");
+    esp_http_client_set_header(client, "Accept", accept);
+    String authHeader;
+    if (!token.isEmpty()) {
+        authHeader = "Bearer " + token;
+        esp_http_client_set_header(client, "Authorization", authHeader.c_str());
+    }
+
+    const esp_err_t result = esp_http_client_perform(client);
+    s_lastNativeHttpError = result;
+    s_lastNativeHttpErrno = esp_http_client_get_errno(client);
+    outCode = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+    return result == ESP_OK && outCode == 200 && body.valid();
+}
+
 static bool ghHttpGet(const String& url, const String& token, bool octetAccept,
-                      String& outBody, int& outCode) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-    if (!http.begin(client, url)) { outCode = -1; return false; }
-    http.setTimeout(GH_OTA_HTTP_TIMEOUT_MS);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("User-Agent", "BirdNest-OTA");
-    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
-    http.addHeader("Accept", octetAccept ? "application/octet-stream" : "application/vnd.github+json");
-    if (!token.isEmpty()) http.addHeader("Authorization", "Bearer " + token);
-    outCode = http.GET();
-    if (outCode > 0) outBody = http.getString();
-    http.end();
-    return outCode == 200;
+                      String& outBody, int& outCode, bool pinCert = true) {
+    NativeHttpBody body(4096);
+    const bool ok = ghNativeHttpGet(
+        url,
+        token,
+        octetAccept ? "application/octet-stream" : "application/vnd.github+json",
+        body,
+        outCode,
+        pinCert);
+    outBody = "";
+    if (body.data() && body.length() > 0) {
+        outBody.concat(body.data(), static_cast<unsigned int>(body.length()));
+    }
+    return ok;
 }
 
 static bool ghFetchReleases(const String& token,
-                            DynamicJsonDocument& outDoc,
+                            ReleasesJsonDocument& outDoc,
                             bool& parseError,
                             int& httpCode) {
     parseError = false;
     httpCode = -1;
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
     const String url = String("https://") + OTA_GH_API_HOST + "/repos/" + OTA_GH_OWNER + "/" + OTA_GH_REPO + "/releases?per_page=10";
-    if (!http.begin(client, url)) return false;
-    http.setTimeout(GH_OTA_HTTP_TIMEOUT_MS);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("User-Agent", "BirdNest-OTA");
-    http.addHeader("X-GitHub-Api-Version", "2022-11-28");
-    http.addHeader("Accept", "application/vnd.github+json");
-    if (!token.isEmpty()) http.addHeader("Authorization", "Bearer " + token);
-    httpCode = http.GET();
-    if (httpCode != 200) { http.end(); return false; }
-    DeserializationError derr = deserializeJson(outDoc, http.getStream());
-    http.end();
+    NativeHttpBody body(65536);
+    setOtaRuntimeStage(OtaRuntimeStage::ReleasesHttp);
+    if (!ghNativeHttpGet(url, token, "application/vnd.github+json", body, httpCode)) {
+        return false;
+    }
+
+    setOtaRuntimeStage(OtaRuntimeStage::ReleasesParse);
+    StaticJsonDocument<512> filter;
+    filter[0]["tag_name"] = true;
+    filter[0]["prerelease"] = true;
+    filter[0]["assets"][0]["name"] = true;
+    filter[0]["assets"][0]["url"] = true;
+    filter[0]["assets"][0]["browser_download_url"] = true;
+
+    DeserializationError derr = deserializeJson(
+        outDoc,
+        body.data(),
+        body.length(),
+        DeserializationOption::Filter(filter));
     if (derr != DeserializationError::Ok || !outDoc.is<JsonArray>()) { parseError = true; return false; }
     return true;
 }
@@ -437,6 +733,8 @@ bool ghOtaHealthProbe() {
 }
 
 GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
+    OtaRuntimeStageGuard runtimeStageGuard;
+
     if (!s_ghOtaInitialized) {
         telegramSendDebug("[OTA][ERR] check failed: module not initialized", 0);
         return GhOtaCheck::Error;
@@ -454,6 +752,13 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         return GhOtaCheck::Skipped;
     }
 
+    if (!manualOverride && now > 100000) {
+        const uint32_t backoffUntil = nvsReadU32(GH_OTA_KEY_BACKOFF, 0);
+        const uint32_t lastCheck    = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
+        if (backoffUntil > static_cast<uint32_t>(now)) return GhOtaCheck::Skipped;
+        if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
+    }
+
     if (!manualOverride) {
         if (!ghOtaHealthProbe()) {
             markWifiStabilityFailure(now);
@@ -464,17 +769,17 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
 
     markWifiStabilitySuccess();
 
-    if (!manualOverride && now > 100000) {
-        const uint32_t backoffUntil = nvsReadU32(GH_OTA_KEY_BACKOFF, 0);
-        const uint32_t lastCheck    = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
-        if (backoffUntil > static_cast<uint32_t>(now)) return GhOtaCheck::Skipped;
-        if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
-    }
+    // UniversalTelegramBot keeps its TLS client alive after command replies.
+    // Release those buffers before opening a second TLS session to GitHub.
+    setOtaRuntimeStage(OtaRuntimeStage::TelegramClose);
+    telegramCloseConnection();
 
+    setOtaRuntimeStage(OtaRuntimeStage::MqttStart);
     mqttOtaEvent("ota_check_start", "github_release_query");
 
+    setOtaRuntimeStage(OtaRuntimeStage::TokenAndJsonAlloc);
     const String token = nvsReadString(GH_OTA_KEY_TOKEN);
-    DynamicJsonDocument releasesDoc(32768);
+    ReleasesJsonDocument releasesDoc(12288);
     bool releasesOk = false, releasesParseErr = false;
     int releasesCode = -1;
     for (uint8_t attempt = 0; attempt < GH_OTA_MAX_CHECK_ATTEMPTS; ++attempt) {
@@ -495,6 +800,8 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         else                          hint = "unexpected API response";
         telegramSendDebug(
             "[OTA][ERR] releases fetch failed: http=" + String(releasesCode) +
+            " esp=" + String(static_cast<int>(s_lastNativeHttpError)) +
+            " errno=" + String(s_lastNativeHttpErrno) +
             " parse=" + String(releasesParseErr ? "yes" : "no") +
             " repo=" + String(OTA_GH_OWNER) + "/" + String(OTA_GH_REPO) +
             " hint=" + hint, 0);
@@ -507,6 +814,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     String bestVersion, bestManifestUrl, bestManifestBrowserUrl;
     bool bestPrivate = !token.isEmpty();
 
+    setOtaRuntimeStage(OtaRuntimeStage::ReleaseScan);
     for (JsonObject release : releasesDoc.as<JsonArray>()) {
         const bool prerelease = release["prerelease"] | false;
         if (channel == "stable" && prerelease) continue;
@@ -544,9 +852,12 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     const String manifestUrl = (!token.isEmpty() && !bestManifestUrl.isEmpty()) ? bestManifestUrl : bestManifestBrowserUrl;
     const bool manifestOctet = !token.isEmpty() && !bestManifestUrl.isEmpty();
     bool manifestOk = false;
+    setOtaRuntimeStage(OtaRuntimeStage::ManifestHttp);
+    // Not pinned: asset URLs (both API and browser_download_url forms) redirect to
+    // objects.githubusercontent.com, whose cert chain differs from github.com/api.github.com.
     for (uint8_t attempt = 0; attempt < GH_OTA_MAX_CHECK_ATTEMPTS; ++attempt) {
         manifestBody = ""; manifestCode = -1;
-        if (ghHttpGet(manifestUrl, token, manifestOctet, manifestBody, manifestCode)) { manifestOk = true; break; }
+        if (ghHttpGet(manifestUrl, token, manifestOctet, manifestBody, manifestCode, false)) { manifestOk = true; break; }
         if (attempt + 1 < GH_OTA_MAX_CHECK_ATTEMPTS) delay(GH_OTA_CHECK_RETRY_DELAY_MS);
     }
     if (!manifestOk) {
@@ -557,6 +868,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
     }
 
     StaticJsonDocument<2048> manifest;
+    setOtaRuntimeStage(OtaRuntimeStage::ManifestParse);
     if (deserializeJson(manifest, manifestBody) != DeserializationError::Ok) {
         incrementCheckFailStreak();
         telegramSendDebug("[OTA][ERR] manifest parse failed: bytes=" + String(manifestBody.length()), 0);
@@ -576,6 +888,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
 
     // Resolve binary URL from releases list
     String binApiUrl, binBrowserUrl;
+    setOtaRuntimeStage(OtaRuntimeStage::BinaryScan);
     for (JsonObject release : releasesDoc.as<JsonArray>()) {
         String tag = release["tag_name"] | "";
         if (tag != ("v" + bestVersion)) continue;
@@ -609,9 +922,27 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
 
     if (now > 100000) nvsWriteU32(GH_OTA_KEY_LAST_CHK, static_cast<uint32_t>(now));
     nvsWriteU16(GH_OTA_KEY_CHK_FAIL, 0);
+    setOtaRuntimeStage(OtaRuntimeStage::SavePending);
     savePendingTarget(out, "");
     mqttOtaEvent("ota_update_available", OTA_REASON_UPDATE_FOUND, bestVersion);
     return GhOtaCheck::UpdateAvailable;
+}
+
+String ghOtaConsumeCrashStage() {
+    if (s_otaRuntimeMagic != GH_OTA_RUNTIME_MAGIC ||
+        s_otaRuntimeStage == static_cast<uint32_t>(OtaRuntimeStage::Idle)) {
+        return "";
+    }
+
+    const OtaRuntimeStage stage = static_cast<OtaRuntimeStage>(s_otaRuntimeStage);
+    const uint32_t freeHeap = s_otaRuntimeFreeHeap;
+    const uint32_t largestBlock = s_otaRuntimeLargestBlock;
+    const uint32_t freePsram = s_otaRuntimeFreePsram;
+    setOtaRuntimeStage(OtaRuntimeStage::Idle);
+    return String(otaRuntimeStageName(stage)) +
+           " free=" + String(freeHeap) +
+           " largest=" + String(largestBlock) +
+           " psram=" + String(freePsram);
 }
 
 bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
@@ -623,7 +954,17 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
 
     const float battery   = batteryReadVoltage();
     const float threshold = (target.minBatteryV > GH_OTA_MIN_INSTALL_BATTERY_V) ? target.minBatteryV : GH_OTA_MIN_INSTALL_BATTERY_V;
-    if (battery > 0.0f && battery < threshold) {
+    // Fail-safe battery gate. A non-positive read (broken ADC, disconnected
+    // voltage divider, miscalibrated sensor) MUST block install — without this
+    // the device could brick mid-flash on a dying battery. See swarm review
+    // M-10 (v0.1.3).
+    if (battery <= 0.0f) {
+        savePendingTarget(target, "battery_unknown");
+        mqttOtaEvent("ota_install_blocked", OTA_REASON_BATTERY_UNKNOWN, target.version);
+        telegramSendDebug("[OTA][WARN] install blocked: battery reading invalid (sensor/ADC fault), threshold=" + String(threshold, 2) + "V", 0);
+        return false;
+    }
+    if (battery < threshold) {
         savePendingTarget(target, "battery_low");
         mqttOtaEvent("ota_install_blocked", OTA_REASON_BATTERY_LOW, target.version);
         telegramSendDebug("[OTA][WARN] install blocked: battery " + String(battery, 2) + "V below " + String(threshold, 2) + "V", 1);
@@ -810,6 +1151,11 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
 
     err = esp_ota_end(otaHandle);
     if (err != ESP_OK) {
+        // ESP-IDF docs: when esp_ota_end fails, the handle must be aborted to
+        // release the flash write-protected state. Without this, the next
+        // esp_ota_begin on the same partition can return ESP_ERR_INVALID_STATE.
+        // See swarm review M-11 (v0.1.3).
+        esp_ota_abort(otaHandle);
         savePendingTarget(target, "ota_finish_failed");
         mqttOtaEvent("ota_update_fail", OTA_REASON_OTA_FINISH_FAILED, target.version);
         telegramSendDebug("[OTA][ERR] esp_ota_end failed, err=" + String(static_cast<int>(err)), 0);
@@ -867,6 +1213,11 @@ void ghOtaConfirmHealthIfPending() {
 String ghOtaStatusJson() {
     StaticJsonDocument<768> doc;
     doc["current_version"]   = FW_VERSION;
+    // Surface the local-build fallback explicitly so the operator can see that
+    // a "0.0.0-dev" FW_VERSION is a pre-release build and any SemVer-based
+    // comparison will report "update available" against any tagged release.
+    // See swarm review M-9 (v0.1.3).
+    doc["local_build"]       = (strcmp(FW_VERSION, "0.0.0-dev") == 0);
     doc["channel"]           = ghOtaGetChannel();
     doc["auto"]              = ghOtaIsAutoEnabled();
     doc["last_check"]        = nvsReadU32(GH_OTA_KEY_LAST_CHK, 0);
@@ -953,3 +1304,15 @@ bool ghOtaClearToken(bool* droppedPendingPrivateTarget) {
 }
 
 bool ghOtaHasToken() { return !nvsReadString(GH_OTA_KEY_TOKEN, "").isEmpty(); }
+
+void ghOtaResetAll() {
+    // Best-effort full namespace erase. Used by /reset_config so that a
+    // device sold or recycled does not retain the GitHub token, pending
+    // target, or any diagnostic state. Idempotent; missing namespace is
+    // not an error. See swarm review H-4 (v0.1.3).
+    nvs_handle_t handle;
+    if (nvs_open(GH_OTA_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return;
+    nvs_erase_all(handle);
+    nvs_commit(handle);
+    nvs_close(handle);
+}

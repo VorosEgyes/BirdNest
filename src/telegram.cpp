@@ -13,7 +13,12 @@
 #include <UniversalTelegramBot.h>
 #include <Arduino.h>
 #include <Preferences.h>
+
+extern uint8_t getLastSleepStage();
+extern uint32_t getPreviousBootStage();
+extern uint32_t getCurrentBootStage();
 #include <esp_ota_ops.h>
+#include <esp_system.h>
 
 // static objects, not pointers, token set at construct time.
 static WiFiClientSecure s_client;
@@ -31,9 +36,14 @@ static bool          s_camFlip       = false;
 static int32_t       s_lastMessageId = 0;  // Last processed Telegram update_id
 static bool          s_lastMsgDirty  = false;
 static unsigned long s_lastMsgPersistMs = 0;
+enum class PendingOtaAction : uint8_t { None, Check, Install };
+static PendingOtaAction s_pendingOtaAction = PendingOtaAction::None;
+static String           s_pendingOtaChatId;
+static uint32_t         s_pendingSleepSec = 0;
 typedef void (*PhotoCallback)(const char*);
 static PhotoCallback s_photoCb       = nullptr;
 static SleepCallback s_sleepCb       = nullptr;
+static const char* resetReasonName(esp_reset_reason_t reason);
 
 static const uint16_t STARTUP_MSG_PROCESS_LIMIT = 10;
 static const unsigned long STARTUP_MSG_TIME_LIMIT_MS = 5000UL;
@@ -242,8 +252,8 @@ static String buildHelpMessage() {
            "/reset_config - erase WiFi and stored credentials\n"
            "/debug0|1|2 - debug verbosity (minimal/normal/verbose)\n"
            "/otastatus - GitHub OTA status JSON\n"
-           "/otaupdate_check - check for new release\n"
-           "/otaupdate_now - check and install immediately\n"
+           "/otaupdate_check [--allow-local-build] - check for new release\n"
+           "/otaupdate_now [--allow-local-build] - check and install immediately\n"
            "/otaupdate_auto_on | /otaupdate_auto_off - auto-update toggle\n"
            "/otachannel stable|beta\n"
            "/otatoken_set <token> - set GitHub token (private repos)\n"
@@ -289,6 +299,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         String calState = batteryIsCalibrationEnabled() ? "ON" : "OFF";
         String deviceLabel = String(getDeviceLabel());
         String otaHost = String(getOtaHostname());
+        const String otaCrashStage = ghOtaConsumeCrashStage();
         telegramSend(chatId.c_str(),
             "BirdNest online\nDevice: " + deviceLabel +
             "\nIP: " + WiFi.localIP().toString() +
@@ -303,6 +314,13 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
             "\nGitHub OTA: " + String(ghOtaIsAutoEnabled() ? "AUTO" : "MANUAL") +
             " / " + ghOtaGetChannel() +
             " / token=" + String(ghOtaHasToken() ? "SET" : "EMPTY") +
+            "\nUptime: " + String(millis() / 1000UL) + " s" +
+            "\nReset reason: " + String(resetReasonName(esp_reset_reason())) +
+            "\nBoot stage: " + String(getPreviousBootStage()) +
+            " -> " + String(getCurrentBootStage()) +
+            "\nOTA crash stage: " + (otaCrashStage.isEmpty() ? "none" : otaCrashStage) +
+            "\nSleep stage: " + String(getLastSleepStage()) +
+            "\nSleep: " + String(s_sleepSec) + " s" +
             "\nMaintenance: " + (s_maintMode ? "ON" : "OFF") +
             "\nOTA recovery: " + String(otaRecoveryIsArmed() ? "ARMED" : "OFF") +
             "\nMirror: " + (s_camMirror ? "ON" : "OFF") +
@@ -342,15 +360,19 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     else if (text == "/maint_off") {
         s_maintMode = false;
         saveRuntimeConfig();
-        telegramSend(chatId.c_str(), "Maintenance mode OFF - deep sleep active.");
+        if (s_sleepSec > 0) {
+            telegramSend(chatId.c_str(),
+                "Maintenance mode OFF - entering deep sleep now.");
+        } else {
+            telegramSend(chatId.c_str(),
+                "Maintenance mode OFF, but deep sleep is disabled. Use /sleepXX to enable it.");
+        }
         telegramSendDebug("[CMD] maintenance mode disabled by chat " + chatId, 1);
 
         // Live /maint_off should return to power-saving mode immediately.
         // Do not force sleep while replaying queued startup messages.
         if (allowResetConfig && s_sleepCb && s_sleepSec > 0) {
-            telegramSendDebug("[CMD] entering deep sleep after /maint_off", 1);
-            delay(200);
-            s_sleepCb(s_sleepSec);
+            s_pendingSleepSec = s_sleepSec;
         }
     }
     else if (text == "/photo") {
@@ -367,6 +389,9 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(),
             "Resetting config. Connect to AP \"" + String(getApName()) + "\" to reconfigure.");
         telegramSendDebug("[CMD] executing /reset_config requested by chat " + chatId, 0);
+        // Erase the GitHub OTA NVS namespace first so the GitHub token
+        // (plaintext) does not survive a factory reset. See swarm review H-4.
+        ghOtaResetAll();
         delay(1000);
         wifiReset();
     }
@@ -389,8 +414,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
                 // Only execute immediate sleep for live commands.
                 // Startup queue replay must not force the device back to sleep.
                 if (allowResetConfig && s_sleepCb) {
-                    delay(200);
-                    s_sleepCb(s_sleepSec);
+                    s_pendingSleepSec = s_sleepSec;
                 }
             }
         } else {
@@ -427,7 +451,6 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
     }
     else if (text == "/bootstrap_prepare") {
         s_maintMode = true;
-        s_sleepSec = 0;
         saveRuntimeConfig();
         WiFi.setSleep(false);
         otaArmRecovery();
@@ -437,7 +460,7 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
 
         String msgOut = "Bootstrap mode armed:\n"
                         "- maintenance=ON\n"
-                        "- sleep=OFF\n"
+                        "- sleep interval=PRESERVED\n"
                         "- wifi modem sleep=OFF\n"
                         "- ota recovery=ARMED\n\n" + preflight;
 
@@ -664,50 +687,54 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         }
         telegramSend(chatId.c_str(), "OTA channel set to: " + ghOtaGetChannel());
     }
-    else if (text == "/otaupdate_check" || text == "/otaupdate_now") {
+    else if (text == "/otaupdate_check" || text == "/otaupdate_now" ||
+             text.startsWith("/otaupdate_check ") || text.startsWith("/otaupdate_now ")) {
         if (!allowResetConfig) {
             telegramSendDebug("[CMD] skipped stale " + text + " from startup queue", 1);
             return;
         }
-        const bool isNow = (text == "/otaupdate_now");
+        // Parse optional --allow-local-build flag. Only meaningful for a
+        // 0.0.0-dev (pre-tag) build, where any tagged release would otherwise
+        // look like "update available" via SemVer precedence. See swarm
+        // review M-9 (v0.1.3).
+        const bool allowLocalBuild = (text.indexOf("--allow-local-build") >= 0);
+        if (strcmp(FW_VERSION, "0.0.0-dev") == 0 && !allowLocalBuild) {
+            telegramSend(chatId.c_str(),
+                "Local build (0.0.0-dev) detected. Refusing to check for updates "
+                "without explicit --allow-local-build flag. See /otastatus.local_build.");
+            telegramSendDebug("[CMD] refused " + text + " on 0.0.0-dev without --allow-local-build", 1);
+            return;
+        }
+        const bool isNow = text.startsWith("/otaupdate_now");
+        if (s_pendingOtaAction != PendingOtaAction::None) {
+            telegramSend(chatId.c_str(), "An OTA operation is already pending.");
+            return;
+        }
+
+        s_pendingOtaAction = isNow ? PendingOtaAction::Install : PendingOtaAction::Check;
+        s_pendingOtaChatId = chatId;
         telegramSend(chatId.c_str(),
             isNow ? "OTA check+install started. May take ~20 s..."
                   : "OTA check started. May take ~20 s...");
-
-        // Lazy init: safe to call here because Telegram commands arrive after
-        // the ArduinoOTA startup window has long settled.
-        ghOtaInit();
-
-        GhOtaTarget target;
-        const GhOtaCheck check = ghOtaCheckForUpdate(target, true);
-        if (check == GhOtaCheck::NoUpdate) {
-            telegramSend(chatId.c_str(), "OTA check done: no newer release found."); return;
-        }
-        if (check == GhOtaCheck::Skipped) {
-            telegramSend(chatId.c_str(), "OTA check skipped (network/time gate)."); return;
-        }
-        if (check == GhOtaCheck::Error) {
-            telegramSend(chatId.c_str(), "OTA check failed. See debug chat."); return;
-        }
-        telegramSend(chatId.c_str(),
-            "Update available: " + target.version +
-            " (channel=" + target.channel +
-            " min_batt=" + String(target.minBatteryV, 2) + "V)");
-        if (isNow) {
-            const bool ok = ghOtaInstall(target, true);
-            if (!ok) {
-                const String reason = ghOtaGetPendingReason();
-                telegramSend(chatId.c_str(),
-                    "Install not started. reason=" + (reason.isEmpty() ? "unknown" : reason) +
-                    "\nCheck /otastatus and debug chat.");
-            }
-        }
     }
     else if (text.startsWith("/otatoken_set ")) {
         String token = text.substring(String("/otatoken_set ").length());
         token.trim();
         if (!ghOtaSetToken(token)) {
-            telegramSend(chatId.c_str(), "Token save failed. Usage: /otatoken_set <token>");
+            // Failure path: still delete the operator's message so the rejected
+            // token (wrong length, accidental paste with quotes, etc.) does not
+            // linger in chat history. Surface the actual length so the operator
+            // can fix it without guessing. See swarm review H-2 (v0.1.3).
+            if (s_bot && msg.message_id > 0) {
+                StaticJsonDocument<128> payload;
+                payload["chat_id"] = chatId;
+                payload["message_id"] = msg.message_id;
+                s_bot->sendPostToTelegram("deleteMessage", payload.as<JsonObject>());
+            }
+            String reject = "Token rejected: must be 10..200 chars (got ";
+            reject += String(token.length());
+            reject += "). Usage: /otatoken_set <token>";
+            telegramSend(chatId.c_str(), reject);
             return;
         }
         // Attempt to delete the message to avoid token exposure in chat history.
@@ -788,8 +815,30 @@ bool telegramSendDebug(const String& message, uint8_t level) {
     );
 }
 
+void telegramCloseConnection() {
+    s_client.stop();
+    yield();
+}
+
+static const char* resetReasonName(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_POWERON:  return "POWERON";
+        case ESP_RST_EXT:      return "EXTERNAL";
+        case ESP_RST_SW:       return "SOFTWARE";
+        case ESP_RST_PANIC:    return "PANIC";
+        case ESP_RST_INT_WDT:  return "INT_WDT";
+        case ESP_RST_TASK_WDT: return "TASK_WDT";
+        case ESP_RST_WDT:      return "WDT";
+        case ESP_RST_DEEPSLEEP:return "DEEPSLEEP";
+        case ESP_RST_BROWNOUT: return "BROWNOUT";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "UNKNOWN";
+    }
+}
+
 bool telegramSendWelcome() {
     const bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+    const String otaCrashStage = ghOtaConsumeCrashStage();
     int32_t rssi = wifiConnected ? WiFi.RSSI() : 0;
     float temp = tempRead();
     float battRaw = batteryReadRawVoltage();
@@ -800,8 +849,13 @@ bool telegramSendWelcome() {
     String rssiStr = wifiConnected
         ? (String(rssi) + " dBm (" + String(wifiRssiQuality(rssi)) + ")")
         : String("N/A");
+    String resetInfo = "Reset reason: " + String(resetReasonName(esp_reset_reason())) + "\n";
+    if (!otaCrashStage.isEmpty()) {
+        resetInfo += "OTA crash stage: " + otaCrashStage + "\n";
+    }
     String msg = "BirdNest camera online!\n"
                  "Device: " + String(getDeviceLabel()) + "\n"
+                 + resetInfo +
                  "IP: " + WiFi.localIP().toString() + "\n"
                  "WiFi RSSI: " + rssiStr + "\n"
                  "Battery: " + battStr + "\n"
@@ -877,6 +931,52 @@ void telegramLoop() {
     if (numNewMessages > 0) {
         for (int i = 0; i < numNewMessages; i++) handleMessage(s_bot->messages[i]);
         persistLastMessageId(false);
+    }
+}
+
+void telegramRunDeferredActions() {
+    if (s_pendingSleepSec > 0) {
+        const uint32_t sleepSec = s_pendingSleepSec;
+        s_pendingSleepSec = 0;
+        s_sleepCb(sleepSec);
+        return;
+    }
+
+    if (s_pendingOtaAction == PendingOtaAction::None) return;
+
+    const PendingOtaAction action = s_pendingOtaAction;
+    const String chatId = s_pendingOtaChatId;
+    s_pendingOtaAction = PendingOtaAction::None;
+    s_pendingOtaChatId = "";
+
+    telegramCloseConnection();
+    ghOtaInit();
+
+    GhOtaTarget target;
+    const GhOtaCheck check = ghOtaCheckForUpdate(target, true);
+    if (check == GhOtaCheck::NoUpdate) {
+        telegramSend(chatId.c_str(), "OTA check done: no newer release found.");
+        return;
+    }
+    if (check == GhOtaCheck::Skipped) {
+        telegramSend(chatId.c_str(), "OTA check skipped (network/time gate).");
+        return;
+    }
+    if (check == GhOtaCheck::Error) {
+        telegramSend(chatId.c_str(), "OTA check failed. See debug chat.");
+        return;
+    }
+
+    telegramSend(chatId.c_str(),
+        "Update available: " + target.version +
+        " (channel=" + target.channel +
+        " min_batt=" + String(target.minBatteryV, 2) + "V)");
+
+    if (action == PendingOtaAction::Install && !ghOtaInstall(target, true)) {
+        const String reason = ghOtaGetPendingReason();
+        telegramSend(chatId.c_str(),
+            "Install not started. reason=" + (reason.isEmpty() ? "unknown" : reason) +
+            "\nCheck /otastatus and debug chat.");
     }
 }
 

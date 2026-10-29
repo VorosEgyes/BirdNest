@@ -31,6 +31,24 @@ static uint32_t s_wifiRecoveryAttempts = 0;
 static unsigned long s_lastHealthReportMs = 0;
 static unsigned long s_lastGoodCameraActivityMs = 0;
 static unsigned long s_lastGoodWifiActivityMs = 0;
+RTC_DATA_ATTR static bool s_sleepWasRequested = false;
+RTC_DATA_ATTR static uint8_t s_sleepStage = 0;
+static constexpr uint32_t BOOT_STAGE_MAGIC = 0x424E5354;
+RTC_NOINIT_ATTR static uint32_t s_bootStageMagic;
+RTC_NOINIT_ATTR static uint32_t s_bootStage;
+static uint32_t s_previousBootStage = 0;
+
+uint8_t getLastSleepStage() {
+    return s_sleepStage;
+}
+
+uint32_t getPreviousBootStage() {
+    return s_previousBootStage;
+}
+
+uint32_t getCurrentBootStage() {
+    return s_bootStage;
+}
 
 static void updateHealthActivity(bool wifiOk, bool cameraOk) {
     const unsigned long now = millis();
@@ -52,13 +70,6 @@ static void emitHealthReportIfNeeded() {
                        " camera=" + String(s_lastGoodCameraActivityMs > 0 ? "ACTIVE" : "IDLE");
     Serial.println(msg);
     telegramSendDebug(msg, 1);
-}
-
-static void prepareForSleepShutdown() {
-    cameraDeinit();
-    WiFi.disconnect(true, true);
-    WiFi.mode(WIFI_OFF);
-    yield();
 }
 
 static bool wifiConnectWithRetries() {
@@ -112,13 +123,13 @@ static bool wifiRuntimeRecoveryTick() {
         Serial.println("[WIFI] runtime reconnect attempt " + String(s_wifiRecoveryAttempts));
         if (s_wifiRecoveryAttempts >= 4) {
             Serial.println("[WIFI] repeated reconnect failures, forcing modem reset");
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(true, false);
             WiFi.mode(WIFI_OFF);
             delay(250);
             WiFi.mode(WIFI_STA);
             WiFi.begin();
         } else {
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(false, false);
             WiFi.reconnect();
         }
     }
@@ -176,14 +187,17 @@ static void enterDeepSleepSeconds(uint32_t seconds) {
         Serial.println("[PWR] deep sleep suppressed – OTA active");
         return;
     }
-    String nextWake = syncTimeIfNeeded() ? formatNextWakeTime(seconds) : "unknown";
-    String sleepMsg = "[PWR] going to deep sleep. Next wake-up: " + nextWake;
-
-    telegramSendDebug(sleepMsg, 0);
-
-    Serial.println("[PWR] entering deep sleep for " + String(seconds) + "s");
-    prepareForSleepShutdown();
+    s_sleepStage = 1;
     esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(seconds) * 1000000ULL);
+    s_sleepStage = 2;
+    s_sleepWasRequested = true;
+    Serial.printf("[PWR] entering deep sleep for %u s\n", seconds);
+    Serial.flush();
+    WiFi.disconnect(true, false);
+    WiFi.mode(WIFI_OFF);
+    s_sleepStage = 3;
+    delay(100);
+    s_sleepStage = 4;
     esp_deep_sleep_start();
 }
 
@@ -209,7 +223,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
         if (attempt < maxTries) {
             Serial.println("[PHOTO] send failed, retrying...");
             cameraDeinit();
-            WiFi.disconnect(true, true);
+            WiFi.disconnect(false, false);
             WiFi.reconnect();
             const unsigned long backoffMs = static_cast<unsigned long>(PHOTO_SEND_RETRY_BACKOFF_MS) * static_cast<unsigned long>(attempt);
             telegramSendDebug("[PHOTO] retrying in " + String(backoffMs) + " ms (next attempt " + String(attempt + 1) + "/" + String(maxTries) + ")", 1);
@@ -223,7 +237,7 @@ static bool captureAndSendPhoto(const char* chatId, bool retryOnce) {
     } else {
         Serial.println("[PHOTO] forcing camera/WiFi recovery after repeated failure");
         cameraDeinit();
-        WiFi.disconnect(true, true);
+        WiFi.disconnect(false, false);
         WiFi.reconnect();
         updateHealthActivity(true, false);
     }
@@ -308,7 +322,17 @@ static void nightSleepIfNeeded() {
 
 void setup() {
     Serial.begin(115200);
+    if (s_bootStageMagic != BOOT_STAGE_MAGIC) {
+        s_bootStageMagic = BOOT_STAGE_MAGIC;
+        s_bootStage = 0;
+    }
+    s_previousBootStage = s_bootStage;
+    s_bootStage = 1;
     Serial.println("\n\n=== BirdNest boot ===");
+    const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+    Serial.printf("[PWR] previous sleep requested=%s, wake cause=%d\n",
+                  s_sleepWasRequested ? "yes" : "no", static_cast<int>(wakeCause));
+    s_sleepWasRequested = false;
     // Arduino framework: watchdog is fed by yield()/delay() in loop and long operations
 
     // Temperature sensor – does not depend on WiFi
@@ -329,6 +353,7 @@ void setup() {
     }
     WiFi.setSleep(false);
     netHealthOnBootConnected();
+    s_bootStage = 2;
     Serial.println("[WIFI] connected: " + WiFi.localIP().toString());
     otaInit();
 
@@ -338,24 +363,7 @@ void setup() {
     if (!otaStartupWindow(batteryVoltage)) {
         enterDeepSleepSeconds(otaGetRecoverySleepSeconds(batteryVoltage));
     }
-
-    // GitHub OTA: init module, confirm post-install rollback health if needed,
-    // then run auto-check/install when enabled.
-    // Placed after the ArduinoOTA startup window to let the UDP/mDNS stack settle.
-    ghOtaInit();
-    ghOtaConfirmHealthIfPending();
-    if (ghOtaIsAutoEnabled() && !telegramIsMaintMode()) {
-        GhOtaTarget pendingTarget;
-        if (ghOtaGetPendingTarget(pendingTarget)) {
-            ghOtaInstall(pendingTarget);
-        } else {
-            GhOtaTarget target;
-            const GhOtaCheck check = ghOtaCheckForUpdate(target, false);
-            if (check == GhOtaCheck::UpdateAvailable) {
-                ghOtaInstall(target);
-            }
-        }
-    }
+    s_bootStage = 3;
 
     syncTimeIfNeeded();
 
@@ -366,6 +374,7 @@ void setup() {
     telegramInit();
     telegramSetPhotoCallback(onPhotoRequest);
     telegramSetSleepCallback(onSleepRequest);
+    s_bootStage = 4;
 
     // DS18B20 diagnostics via Telegram (tempInit() already ran before WiFi)
     {
@@ -380,12 +389,42 @@ void setup() {
 
     // Process queued commands first (e.g. /maint_on while device was sleeping)
     // so runtime flags are up to date before any sleep decision.
+    s_bootStage = 5;
     telegramProcessStartupMessages();
+    s_bootStage = 6;
     mqttInit();
+    s_bootStage = 7;
     mqttPublishNow("boot");
+    s_bootStage = 8;
+
+    // GitHub OTA: init module, confirm post-install rollback health if needed,
+    // then run auto-check/install when enabled.
+    // MUST run after telegramInit() and mqttInit() so that the health-confirm
+    // events (mqttOtaEvent, telegramSendDebug) are actually delivered.
+    // See swarm review C-2 (v0.1.3).
+    ghOtaInit();
+    s_bootStage = 9;
+    ghOtaConfirmHealthIfPending();
+    s_bootStage = 10;
+    if (ghOtaIsAutoEnabled() && !telegramIsMaintMode() &&
+        batteryVoltage >= OTA_RECOVERY_MIN_BATTERY_V) {
+        s_bootStage = 11;
+        GhOtaTarget pendingTarget;
+        if (ghOtaGetPendingTarget(pendingTarget)) {
+            ghOtaInstall(pendingTarget);
+        } else {
+            GhOtaTarget target;
+            const GhOtaCheck check = ghOtaCheckForUpdate(target, false);
+            if (check == GhOtaCheck::UpdateAvailable) {
+                ghOtaInstall(target);
+            }
+        }
+    }
+    s_bootStage = 12;
 
     // Night-time check: if after sunset or before sunrise, sleep until sunrise (max 12 h)
     nightSleepIfNeeded();
+    s_bootStage = 13;
 
 
     // Check if we woke from deep sleep – if so, take a photo immediately
@@ -457,6 +496,7 @@ void setup() {
     // This applies to both first boot and timer wakeups.
     uint32_t sleepSecNow = telegramGetSleepSec();
     if (sleepSecNow > 0 && !telegramIsMaintMode() && !otaIsActive()) {
+        s_bootStage = 14;
         enterDeepSleepSeconds(sleepSecNow);
     }
 
@@ -489,6 +529,7 @@ void loop() {
 
     // Handle incoming Telegram commands
     telegramLoop();
+    telegramRunDeferredActions();
     mqttLoop();
 
     // Periodic photo + deep sleep cycle

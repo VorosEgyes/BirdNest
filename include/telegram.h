@@ -21,6 +21,10 @@ bool telegramSend(const char* chatId, const String& message);
 // Level: 0=minimal, 1=normal, 2=verbose.
 bool telegramSendDebug(const String& message, uint8_t level = 1);
 
+// Close the current Telegram TLS connection before another TLS-heavy operation.
+// The bot reconnects automatically on the next send or poll.
+void telegramCloseConnection();
+
 // Runtime debug verbosity (persisted in NVS).
 uint8_t telegramGetDebugVerbosity();
 void telegramSetDebugVerbosity(uint8_t level);
@@ -42,6 +46,9 @@ void telegramProcessStartupMessages();
 
 // Handle incoming commands – call periodically from loop().
 void telegramLoop();
+
+// Run a GitHub OTA command queued by telegramLoop() after message parsing has returned.
+void telegramRunDeferredActions();
 
 // Register a callback that telegramLoop() will invoke when /photo is received.
 // The callback receives the chat_id to send the photo to.

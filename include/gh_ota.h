@@ -71,6 +71,10 @@ void ghOtaConfirmHealthIfPending();
 // JSON status string for /otastatus and MQTT telemetry.
 String ghOtaStatusJson();
 
+// Return and clear the OTA phase retained across an abnormal reset.
+// Empty means no OTA check was active when the previous run ended.
+String ghOtaConsumeCrashStage();
+
 // Retrieve pending install target from NVS (set after check, cleared after install).
 bool ghOtaGetPendingTarget(GhOtaTarget& out);
 String ghOtaGetPendingReason();
@@ -80,8 +84,13 @@ bool   ghOtaSetAutoEnabled(bool enabled);
 bool   ghOtaIsAutoEnabled();
 bool   ghOtaSetChannel(const String& channel);
 String ghOtaGetChannel();
-bool   ghOtaSetToken(const String& token);
-bool   ghOtaClearToken(bool* droppedPendingPrivateTarget = nullptr);
-bool   ghOtaHasToken();
+bool ghOtaSetToken(const String& token);
+bool ghOtaClearToken(bool* droppedPendingPrivateTarget = nullptr);
+bool ghOtaHasToken();
+
+// Erase every key in the GitHub OTA NVS namespace. Used by /reset_config
+// so that a device sold or recycled does not leak the GitHub token,
+// pending target, or last-reason diagnostics. Idempotent.
+void ghOtaResetAll();
 
 #endif // GH_OTA_H
