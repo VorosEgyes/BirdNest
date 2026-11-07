@@ -54,6 +54,10 @@ struct GhOtaTarget {
 // Idempotent; safe to call multiple times (lazy init guard).
 void ghOtaInit();
 
+// Suspend automatic checks after an abnormal reset during an automatic check.
+// Call after Telegram initialization, before processing queued commands.
+void ghOtaRecoverAfterCrash(bool crashLikeReset);
+
 // Check for a newer release on GitHub.
 // manualOverride=true: bypass daily interval and backoff gates.
 GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride = false);

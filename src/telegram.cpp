@@ -79,6 +79,10 @@ static void loadRuntimeConfig() {
     prefs.end();
 }
 
+void telegramLoadRuntimeConfig() {
+    loadRuntimeConfig();
+}
+
 static void saveRuntimeConfig() {
     Preferences prefs;
     prefs.begin(NVS_NAMESPACE, /*readOnly=*/false);
@@ -671,12 +675,20 @@ static void handleMessage(const telegramMessage& msg, bool allowResetConfig = tr
         telegramSend(chatId.c_str(), "OTA status:\n" + ghOtaStatusJson());
     }
     else if (text == "/otaupdate_auto_on") {
-        ghOtaSetAutoEnabled(true);
-        telegramSend(chatId.c_str(), "GitHub OTA auto-update is now ON.");
+        if (ghOtaSetAutoEnabled(true)) {
+            telegramSend(chatId.c_str(), "GitHub OTA auto-update is now ON.");
+        } else {
+            telegramSend(chatId.c_str(), "Failed to save GitHub OTA auto-update setting.");
+            telegramSendDebug("[OTA][ERR] failed to enable automatic updates in NVS", 0);
+        }
     }
     else if (text == "/otaupdate_auto_off") {
-        ghOtaSetAutoEnabled(false);
-        telegramSend(chatId.c_str(), "GitHub OTA auto-update is now OFF.");
+        if (ghOtaSetAutoEnabled(false)) {
+            telegramSend(chatId.c_str(), "GitHub OTA auto-update is now OFF.");
+        } else {
+            telegramSend(chatId.c_str(), "Failed to save GitHub OTA auto-update setting.");
+            telegramSendDebug("[OTA][ERR] failed to disable automatic updates in NVS", 0);
+        }
     }
     else if (text.startsWith("/otachannel")) {
         String arg = text.substring(String("/otachannel").length());

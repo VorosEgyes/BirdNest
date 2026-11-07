@@ -10,7 +10,7 @@
 // Initialise the sensor. Call from setup().
 void tempInit();
 
-// Read temperature in Celsius.
+// Read temperature in Celsius. Measurements are cached for up to 60 seconds.
 // Returns -127.0 if the sensor is not reachable.
 float tempRead();
 

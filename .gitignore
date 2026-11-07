@@ -12,3 +12,10 @@ hardware/**/.history/
 hardware/**/*.kicad_prl
 hardware/**/*-backups/
 hardware/**/*.lck
+
+# python bytecode of the layout tools
+__pycache__/
+*.pyc
+
+# the report the layout tools write while they work
+hardware/**/*-drc.json

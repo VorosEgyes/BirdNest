@@ -1,0 +1,20 @@
+ERC report (2026-03-24T22:22:50+0100, Encoding UTF8)
+
+***** Sheet /
+[pin_to_pin]: Pins of type Output and Power output are connected
+    ; error
+    @(187.96 mm, 43.18 mm): Symbol U3 Pin 3 [+VOUT/GND, Output, Line]
+    @(191.77 mm, 33.02 mm): Symbol #FLG04 Pin 1 [Power output, Line]
+[pin_to_pin]: Pins of type Output and Power output are connected
+    ; error
+    @(187.96 mm, 45.72 mm): Symbol U3 Pin 2 [GND/-VOUT, Output, Line]
+    @(203.20 mm, 33.02 mm): Symbol #FLG05 Pin 1 [Power output, Line]
+[power_pin_not_driven]: Input Power pin not driven by any Output Power pins
+    ; error
+    @(147.32 mm, 138.43 mm): Symbol U1 Pin 1 [GND, Power input, Line]
+[pin_to_pin]: Pins of type Power output and Power output are connected
+    ; error
+    @(203.20 mm, 33.02 mm): Symbol #FLG05 Pin 1 [Power output, Line]
+    @(118.11 mm, 45.72 mm): Symbol U2 Pin 4 [OUT-, Power output, Line]
+
+ ** ERC messages: 4  Errors 4  Warnings 0

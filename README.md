@@ -210,7 +210,8 @@ Common remote error reasons (`cameraGetLastError`):
 
 ### Temperature
 - DS18B20 on GPIO13 OneWire protocol with internal pull-up
-- `TEMP_SAMPLE_COUNT` samples averaged (1–2)
+- One blocking conversion is performed on cache miss; the result is reused for up to 60 seconds across status, MQTT, and photo-caption reads.
+- If no sensor is detected during initialization, reads return `-127.0` without polling the OneWire bus.
 
 ### Battery
 - ADC on GPIO12 with resistor divider formula
@@ -327,6 +328,10 @@ Reports `READY` or `NOT READY` with per-check detail.
 - WiFi instability increments a fail streak with exponential backoff: 6 h → 12 h → 24 h → 48 h max.
 - Backoff is reset after 2 consecutive stable WiFi cycles.
 - Manual `/otaupdate_check` and `/otaupdate_now` bypass daily interval and backoff.
+- The Telegram TLS connection is closed before the automatic GitHub health probe.
+  If an automatic check ends in a crash, the next boot disables automatic checks
+  and reports the retained OTA stage and minimum free task stack in bytes through
+  Telegram. Manual checks remain available; use `/otaupdate_auto_on` to retry.
 
 #### GitHub OTA NVS keys (namespace: `birdnest_gh`)
 
@@ -528,5 +533,3 @@ All keys live in the `birdnest` namespace unless otherwise noted.
 
 Example: 2000 mAh battery with 5-min photo interval = 100+ hours of operation
 Night sleep (12 hours OFF) saves 50%+ battery
-
-

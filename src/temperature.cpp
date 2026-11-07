@@ -13,6 +13,10 @@ static OneWire           s_oneWire(TEMP_PIN);
 static DallasTemperature s_sensors(&s_oneWire);
 static uint8_t           s_sensorCount = 0;
 static bool              s_parasitePower = false;
+static constexpr uint32_t kTemperatureCacheMs = 60000UL;
+static float              s_cachedTemperature = -127.0f;
+static uint32_t           s_lastReadMs = 0;
+static bool               s_hasCachedReading = false;
 
 void tempInit() {
     // GPIO13 (MTCK) has a weak internal pull-down during boot.
@@ -23,28 +27,26 @@ void tempInit() {
     s_sensors.begin();
     s_sensorCount   = s_sensors.getDeviceCount();
     s_parasitePower = s_sensors.isParasitePowerMode();
+    s_cachedTemperature = -127.0f;
+    s_lastReadMs = 0;
+    s_hasCachedReading = false;
 }
 
 uint8_t tempGetSensorCount()   { return s_sensorCount; }
 bool    tempIsParasitePower()  { return s_parasitePower; }
 
 float tempRead() {
-    const uint8_t sampleCount = TEMP_SAMPLE_COUNT;
-    float sum = 0.0f;
-    uint8_t valid = 0;
+    if (s_sensorCount == 0) return -127.0f;
 
-    for (uint8_t i = 0; i < sampleCount; ++i) {
-        s_sensors.requestTemperatures();
-        float t = s_sensors.getTempCByIndex(0);
-        if (t != DEVICE_DISCONNECTED_C) {
-            sum += t;
-            ++valid;
-        }
+    const uint32_t now = millis();
+    if (s_hasCachedReading && (now - s_lastReadMs) < kTemperatureCacheMs) {
+        return s_cachedTemperature;
     }
 
-    if (valid == 0) {
-        return -127.0f; // Sensor not found or disconnected
-    }
-
-    return sum / valid;
+    s_sensors.requestTemperatures();
+    const float temperature = s_sensors.getTempCByIndex(0);
+    s_cachedTemperature = (temperature == DEVICE_DISCONNECTED_C) ? -127.0f : temperature;
+    s_lastReadMs = millis();
+    s_hasCachedReading = true;
+    return s_cachedTemperature;
 }

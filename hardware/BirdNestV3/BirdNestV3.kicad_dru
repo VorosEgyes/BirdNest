@@ -1,0 +1,10 @@
+(version 1)
+
+# The thermistor TH1 is a pin header of 1.00 mm: the two pads are
+# 0.85 mm wide and 1.00 mm apart, so there is 0.15 mm of copper
+# between them.  The clearance of the board is 0.2 mm, so this one
+# pair of pads needs a rule of its own.  The ground pad of the
+# thermistor is the only other copper near it.
+(rule "TH1 the pads of the 1.00 mm header"
+	(constraint clearance (min 0.15mm))
+	(condition "A.insideCourtyard('TH1') && B.insideCourtyard('TH1')"))

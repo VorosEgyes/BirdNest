@@ -117,10 +117,6 @@
 #ifndef TEMP_PIN
   #define TEMP_PIN 13
 #endif
-#ifndef TEMP_SAMPLE_COUNT
-  #define TEMP_SAMPLE_COUNT 2
-#endif
-
 // --- Camera ---
 // FRAMESIZE: 8=VGA(640x480) 9=SVGA(800x600) 10=XGA(1024x768) 12=SXGA 13=UXGA
 #ifndef CAMERA_FRAMESIZE_PSRAM

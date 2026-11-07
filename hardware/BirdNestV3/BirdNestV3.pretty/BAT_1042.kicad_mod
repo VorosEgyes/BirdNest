@@ -1,0 +1,576 @@
+(footprint "BAT_1042"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(property "Reference" "BT3"
+		(at -34.925 -11.43 180)
+		(layer "F.SilkS")
+		(hide yes)
+		(uuid "39ee57eb-eab8-43a9-825a-41f7a2d67fd7")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "Battery"
+		(at -33.02 11.43 0)
+		(layer "F.Fab")
+		(uuid "607f1e8a-0633-4275-b5c6-e4e125a87a43")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "9a6b374e-8222-465e-a515-b6826208909b")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "SMT Holder for 18650 Battery"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "75d68133-432a-4e32-92b4-9b3701c968df")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "MF" "Keystone Electronics Corp."
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "ba44006c-d905-4b36-97fb-0d8618e1f7bb")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "MAXIMUM_PACKAGE_HEIGHT" "15.11mm"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "fade61ed-d87c-4dfc-9a6e-d766309a7d60")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Package" "NON STANDARD-5 Keystone"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "d865e20a-a396-415f-a765-6ac339a6613f")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Price" "None"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "dd24f4fd-c102-4100-8549-4daacb5374e0")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Check_prices" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=eda"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "eda994ea-3748-4bf4-8c9b-282630778e5f")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "STANDARD" "Manufacturer Recommendations"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "472e9d9c-9376-4f12-8d8c-5559068fc2df")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "PARTREV" "E"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "754a485c-8754-4143-aba3-e45a7c5e1746")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "SnapEDA_Link" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=snap"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "06fb074c-3888-43b6-870f-e444cb43344a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "MP" "1042"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "eaaff506-68a7-4cb1-b2c0-65f28229a5d6")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Purchase-URL" "https://www.snapeda.com/api/url_track_click_mouser/?unipart_id=5138169&manufacturer=Keystone Electronics Corp.&part_name=1042&search_term=smt holder for 18650 battery"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "77e3c316-5467-48bc-b8fc-5f6489dda0ef")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description_1" "SMT Holder for 18650 Battery"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "317a7db2-1518-4f15-a055-2f799b975c9e")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "SNAPEDA_PN" "1042"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "ae964720-b766-48d6-9ee7-bb098ff6a480")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Availability" "In Stock"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "4b64aaf8-5b7e-4441-a6ea-56160972cbba")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "MANUFACTURER" "Keystone"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "6a4cc214-8aed-43fa-8491-a488bb9ac02c")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(sheetname "/")
+	(sheetfile "BirdNestV3.kicad_sch")
+	(attr through_hole)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_line
+		(start -43.25 4)
+		(end -42.25 4)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "e42d1227-5352-479a-a015-2fddecff7430")
+	)
+	(fp_line
+		(start -38.525 -10.325)
+		(end -7.038 -10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "4d905257-cf97-4e7a-a9ad-640b9b0cd10c")
+	)
+	(fp_line
+		(start -38.525 -3.55)
+		(end -38.525 -10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "cb8a94e0-d421-49c6-ad47-d8620a343ca5")
+	)
+	(fp_line
+		(start -38.525 10.325)
+		(end -38.525 3.55)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "d4b13462-7171-4f31-82d8-47bbd836b5f0")
+	)
+	(fp_line
+		(start -38.525 10.325)
+		(end 38.525 10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "6eb76206-298d-421d-a76a-07261c2e85bd")
+	)
+	(fp_line
+		(start -1.161 -10.325)
+		(end 38.525 -10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "a61864cf-02b9-409c-bdea-fba3518c11f4")
+	)
+	(fp_line
+		(start 38.525 -10.325)
+		(end 38.525 -3.55)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "9608b2cb-98fc-402e-b05b-c34a19f7c227")
+	)
+	(fp_line
+		(start 38.525 3.55)
+		(end 38.525 10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "0ab378ff-c496-48a4-8770-605ad22a7f8f")
+	)
+	(fp_line
+		(start 42.25 4.5)
+		(end 43.25 4.5)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "67c27515-30b5-4500-97a6-60cc82460d2c")
+	)
+	(fp_line
+		(start 42.75 4)
+		(end 42.75 5)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "90be5452-967b-493e-a121-5839cb862043")
+	)
+	(fp_line
+		(start -43.65 -3.485)
+		(end -38.775 -3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "16482502-7ad8-4daf-911f-1f162b9033ed")
+	)
+	(fp_line
+		(start -43.65 3.485)
+		(end -43.65 -3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "8b65a80a-72ce-4fb1-b809-db01fb04b8ec")
+	)
+	(fp_line
+		(start -38.775 -10.575)
+		(end 38.775 -10.575)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "54c491c9-e3f2-4fc6-8168-917cd716339a")
+	)
+	(fp_line
+		(start -38.775 -3.485)
+		(end -38.775 -10.575)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "fc0a1ee2-0d3f-4b0c-b380-adad7376b2fa")
+	)
+	(fp_line
+		(start -38.775 3.485)
+		(end -43.65 3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "952b5170-937e-4024-800d-9e07332d937c")
+	)
+	(fp_line
+		(start -38.775 10.575)
+		(end -38.775 3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "dbdf50af-45db-405f-9d70-8072a3512b77")
+	)
+	(fp_line
+		(start 38.775 -10.575)
+		(end 38.775 -3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "2a224b85-0f2f-40eb-a9c8-e18f3fdd9c2f")
+	)
+	(fp_line
+		(start 38.775 -3.485)
+		(end 43.65 -3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "2bcf780d-843a-44e7-b399-2c057b699228")
+	)
+	(fp_line
+		(start 38.775 3.485)
+		(end 38.775 10.575)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "d4143f1b-1a88-4b71-8f71-a13556a94077")
+	)
+	(fp_line
+		(start 38.775 10.575)
+		(end -38.775 10.575)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "91fd645f-569c-49ab-9422-8e3dfb3bcb69")
+	)
+	(fp_line
+		(start 43.65 -3.485)
+		(end 43.65 3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "13a039b1-14d7-420f-9a1a-96436ee412f4")
+	)
+	(fp_line
+		(start 43.65 3.485)
+		(end 38.775 3.485)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "76771398-9cb3-49af-9c4f-68a93fa3c6c3")
+	)
+	(fp_line
+		(start -43.25 4)
+		(end -42.25 4)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "a1237220-5808-447a-bd65-d1a03d2550cc")
+	)
+	(fp_line
+		(start -38.525 -10.325)
+		(end 38.525 -10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "93d07e9e-3b6a-4738-bffc-ad045d910343")
+	)
+	(fp_line
+		(start -38.525 10.325)
+		(end -38.525 -10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "413cb157-38ad-40c6-ba44-2f462e4c02f4")
+	)
+	(fp_line
+		(start 38.525 -10.325)
+		(end 38.525 10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "81e5cd75-8000-4e5f-87c5-f91e81095222")
+	)
+	(fp_line
+		(start 38.525 10.325)
+		(end -38.525 10.325)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "755df141-520c-4ccc-bd11-12dd63146857")
+	)
+	(fp_line
+		(start 42.25 4.5)
+		(end 43.25 4.5)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "2814f52c-38d1-41b7-8c64-fbd5f970d1af")
+	)
+	(fp_line
+		(start 42.75 4)
+		(end 42.75 5)
+		(stroke
+			(width 0.127)
+			(type solid)
+		)
+		(layer "F.Fab")
+		(uuid "c05e99c2-2b65-4117-b96d-985a0d8733ae")
+	)
+	(pad "" np_thru_hole circle
+		(at -27.6 8)
+		(size 3.45 3.45)
+		(drill 3.45)
+		(layers "*.Cu" "*.Mask")
+		(uuid "5eb07867-b657-420f-96d1-e1aa14bcad4e")
+	)
+	(pad "" np_thru_hole circle
+		(at 27.6 -8)
+		(size 3.45 3.45)
+		(drill 3.45)
+		(layers "*.Cu" "*.Mask")
+		(uuid "f49f3148-8b4e-427a-92c0-006019c3afb0")
+	)
+	(pad "" np_thru_hole circle
+		(at 35.82 8)
+		(size 2.39 2.39)
+		(drill 2.39)
+		(layers "*.Cu" "*.Mask")
+		(uuid "e8a5b880-d46e-4460-b9d2-a5c9a2f86fe1")
+	)
+	(pad "N" smd rect
+		(at -39.67 0)
+		(size 7.46 6.47)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(solder_mask_margin 0.102)
+		(uuid "700ed922-ea79-46d6-bcbe-9ce13e072a00")
+	)
+	(pad "P" smd rect
+		(at 39.67 0)
+		(size 7.46 6.47)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(solder_mask_margin 0.102)
+		(uuid "5a8a102f-b1b1-4b1c-ac93-722374c91af0")
+	)
+	(embedded_fonts no)
+	(model "/Users/modmj/Platformio/KiCad_Projects/Libraries/1042/1042.step"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz -90 -0 -0)
+		)
+	)
+)

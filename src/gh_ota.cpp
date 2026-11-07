@@ -4,6 +4,7 @@
 #include "config.h"
 #include "mqtt_client.h"
 #include "telegram.h"
+#include "wifi_manager.h"
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
@@ -15,6 +16,8 @@
 #include <esp_http_client.h>
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <mbedtls/sha256.h>
 #include <nvs.h>
 #include <time.h>
@@ -33,7 +36,12 @@ enum class OtaRuntimeStage : uint32_t {
     ManifestHttp,
     ManifestParse,
     BinaryScan,
-    SavePending
+    SavePending,
+    CheckPreflight,
+    HealthProbe,
+    HealthProbeComplete,
+    HealthProbeHttp,
+    HealthProbeParse
 };
 
 static constexpr uint32_t GH_OTA_RUNTIME_MAGIC = 0x47484F54UL;
@@ -42,6 +50,11 @@ static RTC_NOINIT_ATTR uint32_t s_otaRuntimeStage;
 static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreeHeap;
 static RTC_NOINIT_ATTR uint32_t s_otaRuntimeLargestBlock;
 static RTC_NOINIT_ATTR uint32_t s_otaRuntimeFreePsram;
+static constexpr uint32_t GH_OTA_AUTO_CHECK_MAGIC = 0x47484143UL;
+static constexpr uint32_t GH_OTA_SUSPENDED_MAGIC = 0x47485350UL;
+static RTC_NOINIT_ATTR uint32_t s_otaAutoCheckMagic;
+static RTC_NOINIT_ATTR uint32_t s_otaAutoSuspendedMagic;
+static RTC_NOINIT_ATTR uint32_t s_otaRuntimeStackFree;
 
 static void setOtaRuntimeStage(OtaRuntimeStage stage) {
     s_otaRuntimeMagic = GH_OTA_RUNTIME_MAGIC;
@@ -52,12 +65,19 @@ static void setOtaRuntimeStage(OtaRuntimeStage stage) {
         heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
     s_otaRuntimeFreePsram = static_cast<uint32_t>(
         heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    s_otaRuntimeStackFree = static_cast<uint32_t>(uxTaskGetStackHighWaterMark(nullptr));
 }
 
 class OtaRuntimeStageGuard {
 public:
-    OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::CheckEntry); }
-    ~OtaRuntimeStageGuard() { setOtaRuntimeStage(OtaRuntimeStage::Idle); }
+    explicit OtaRuntimeStageGuard(bool automatic) {
+        s_otaAutoCheckMagic = automatic ? GH_OTA_AUTO_CHECK_MAGIC : 0;
+        setOtaRuntimeStage(OtaRuntimeStage::CheckEntry);
+    }
+    ~OtaRuntimeStageGuard() {
+        setOtaRuntimeStage(OtaRuntimeStage::Idle);
+        s_otaAutoCheckMagic = 0;
+    }
 };
 
 static const char* otaRuntimeStageName(OtaRuntimeStage stage) {
@@ -73,6 +93,11 @@ static const char* otaRuntimeStageName(OtaRuntimeStage stage) {
         case OtaRuntimeStage::ManifestParse:    return "manifest_parse";
         case OtaRuntimeStage::BinaryScan:       return "binary_scan";
         case OtaRuntimeStage::SavePending:      return "save_pending";
+        case OtaRuntimeStage::CheckPreflight:  return "check_preflight";
+        case OtaRuntimeStage::HealthProbe:     return "health_probe";
+        case OtaRuntimeStage::HealthProbeComplete: return "health_probe_complete";
+        case OtaRuntimeStage::HealthProbeHttp: return "health_probe_http";
+        case OtaRuntimeStage::HealthProbeParse: return "health_probe_parse";
         default:                                return "unknown";
     }
 }
@@ -96,6 +121,8 @@ struct PsramJsonAllocator {
 using ReleasesJsonDocument = BasicJsonDocument<PsramJsonAllocator>;
 static esp_err_t s_lastNativeHttpError = ESP_OK;
 static int s_lastNativeHttpErrno = 0;
+static int s_lastHealthProbeHttpCode = 0;
+static bool s_lastHealthProbeParseError = false;
 
 static constexpr uint32_t GH_OTA_DAILY_CHECK_SEC         = 86400UL;
 static constexpr float    GH_OTA_MIN_INSTALL_BATTERY_V   = 3.60f;
@@ -722,19 +749,48 @@ void ghOtaInit() {
     }
 }
 
+void ghOtaRecoverAfterCrash(bool crashLikeReset) {
+    if (crashLikeReset && s_otaRuntimeMagic == GH_OTA_RUNTIME_MAGIC &&
+        s_otaRuntimeStage != static_cast<uint32_t>(OtaRuntimeStage::Idle) &&
+        s_otaAutoCheckMagic == GH_OTA_AUTO_CHECK_MAGIC) {
+        s_otaAutoSuspendedMagic = GH_OTA_SUSPENDED_MAGIC;
+    }
+
+    if (s_otaAutoSuspendedMagic != GH_OTA_SUSPENDED_MAGIC) return;
+
+    const String message = ghOtaSetAutoEnabled(false)
+        ? "[OTA][ALERT] automatic checks disabled after crash; manual checks remain "
+          "available. Re-enable with /otaupdate_auto_on."
+        : "[OTA][ALERT] could not save auto-check shutdown; automatic checks "
+          "remain suspended and saving will be retried.";
+    telegramSendDebug(message, 0);
+    if (!telegramSend(getChatId(), message)) {
+        Serial.println("[OTA][ERR] could not send auto-check suspension alert");
+    }
+}
+
 bool ghOtaHealthProbe() {
+    s_lastHealthProbeHttpCode = 0;
+    s_lastHealthProbeParseError = false;
     if (!s_ghOtaInitialized) return false;
     if (WiFi.status() != WL_CONNECTED) return false;
+    const bool trackedCheck = s_otaRuntimeMagic == GH_OTA_RUNTIME_MAGIC &&
+        s_otaRuntimeStage == static_cast<uint32_t>(OtaRuntimeStage::HealthProbe);
     String body; int code = 0;
+    if (trackedCheck) setOtaRuntimeStage(OtaRuntimeStage::HealthProbeHttp);
     const bool ok = ghHttpGet(String("https://") + OTA_GH_API_HOST + "/rate_limit", "", false, body, code);
+    s_lastHealthProbeHttpCode = code;
     if (!ok) return false;
+    if (trackedCheck) setOtaRuntimeStage(OtaRuntimeStage::HealthProbeParse);
     StaticJsonDocument<512> doc;
-    return deserializeJson(doc, body) == DeserializationError::Ok;
+    s_lastHealthProbeParseError = deserializeJson(doc, body) != DeserializationError::Ok;
+    return !s_lastHealthProbeParseError;
 }
 
 GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
-    OtaRuntimeStageGuard runtimeStageGuard;
+    OtaRuntimeStageGuard runtimeStageGuard(!manualOverride);
 
+    setOtaRuntimeStage(OtaRuntimeStage::CheckPreflight);
     if (!s_ghOtaInitialized) {
         telegramSendDebug("[OTA][ERR] check failed: module not initialized", 0);
         return GhOtaCheck::Error;
@@ -759,20 +815,27 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         if (lastCheck > 0 && (static_cast<uint32_t>(now) - lastCheck) < GH_OTA_DAILY_CHECK_SEC) return GhOtaCheck::Skipped;
     }
 
+    // Close Telegram's TLS client before either GitHub HTTPS request.
+    setOtaRuntimeStage(OtaRuntimeStage::TelegramClose);
+    telegramCloseConnection();
+
     if (!manualOverride) {
+        setOtaRuntimeStage(OtaRuntimeStage::HealthProbe);
         if (!ghOtaHealthProbe()) {
+            setOtaRuntimeStage(OtaRuntimeStage::HealthProbeComplete);
             markWifiStabilityFailure(now);
             mqttOtaEvent("ota_check_fail", OTA_REASON_WIFI_UNSTABLE);
+            telegramSendDebug("[OTA][WARN] automatic health probe failed; check deferred: http=" +
+                              String(s_lastHealthProbeHttpCode) +
+                              " esp=" + String(static_cast<int>(s_lastNativeHttpError)) +
+                              " errno=" + String(s_lastNativeHttpErrno) +
+                              " parse=" + String(s_lastHealthProbeParseError ? "yes" : "no"), 1);
             return GhOtaCheck::Skipped;
         }
+        setOtaRuntimeStage(OtaRuntimeStage::HealthProbeComplete);
     }
 
     markWifiStabilitySuccess();
-
-    // UniversalTelegramBot keeps its TLS client alive after command replies.
-    // Release those buffers before opening a second TLS session to GitHub.
-    setOtaRuntimeStage(OtaRuntimeStage::TelegramClose);
-    telegramCloseConnection();
 
     setOtaRuntimeStage(OtaRuntimeStage::MqttStart);
     mqttOtaEvent("ota_check_start", "github_release_query");
@@ -867,7 +930,7 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
         return GhOtaCheck::Error;
     }
 
-    StaticJsonDocument<2048> manifest;
+    BasicJsonDocument<PsramJsonAllocator> manifest(2048);
     setOtaRuntimeStage(OtaRuntimeStage::ManifestParse);
     if (deserializeJson(manifest, manifestBody) != DeserializationError::Ok) {
         incrementCheckFailStreak();
@@ -938,11 +1001,13 @@ String ghOtaConsumeCrashStage() {
     const uint32_t freeHeap = s_otaRuntimeFreeHeap;
     const uint32_t largestBlock = s_otaRuntimeLargestBlock;
     const uint32_t freePsram = s_otaRuntimeFreePsram;
+    const uint32_t stackFree = s_otaRuntimeStackFree;
     setOtaRuntimeStage(OtaRuntimeStage::Idle);
     return String(otaRuntimeStageName(stage)) +
            " free=" + String(freeHeap) +
            " largest=" + String(largestBlock) +
-           " psram=" + String(freePsram);
+           " psram=" + String(freePsram) +
+           " stack_min_bytes=" + String(stackFree);
 }
 
 bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
@@ -1264,8 +1329,22 @@ String ghOtaGetPendingReason() {
     return !reason.isEmpty() ? reason : nvsReadString(GH_OTA_KEY_LAST_REASON, "");
 }
 
-bool ghOtaSetAutoEnabled(bool enabled) { nvsWriteBool(GH_OTA_KEY_AUTO, enabled); return true; }
-bool ghOtaIsAutoEnabled()               { return nvsReadBool(GH_OTA_KEY_AUTO, false); }
+bool ghOtaSetAutoEnabled(bool enabled) {
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(GH_OTA_NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) return false;
+    err = nvs_set_u8(handle, GH_OTA_KEY_AUTO, enabled ? 1 : 0);
+    if (err == ESP_OK) err = nvs_commit(handle);
+    nvs_close(handle);
+    if (err != ESP_OK) return false;
+    s_otaAutoSuspendedMagic = 0;
+    return true;
+}
+
+bool ghOtaIsAutoEnabled() {
+    return s_otaAutoSuspendedMagic != GH_OTA_SUSPENDED_MAGIC &&
+           nvsReadBool(GH_OTA_KEY_AUTO, false);
+}
 
 bool ghOtaSetChannel(const String& channelRaw) {
     String channel = channelRaw; channel.trim(); channel.toLowerCase();

@@ -11,6 +11,8 @@
 // Initialise the bot using the stored token.
 // Must be called after wifiInit() returns true.
 void telegramInit();
+// Load persisted runtime policy before deciding whether to open the OTA window.
+void telegramLoadRuntimeConfig();
 
 // Send a message to a specific chat_id.
 // Returns true on success.

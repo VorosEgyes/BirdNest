@@ -39,6 +39,7 @@ The symbols below are verified against the current repository snapshot and are n
 |---|---|---|---|
 | `wifiInit()` | `bool wifiInit()` | [include/wifi_manager.h](include/wifi_manager.h) | verified |
 | `telegramInit()` | `void telegramInit()` | [include/telegram.h](include/telegram.h) | verified |
+| `telegramLoadRuntimeConfig()` | `void telegramLoadRuntimeConfig()` | [include/telegram.h](include/telegram.h) | verified |
 | `telegramSendDebug(msg, level)` | `bool telegramSendDebug(const String& message, uint8_t level = 1)` | [include/telegram.h](include/telegram.h) | verified |
 | `syncTimeIfNeeded()` | `static bool syncTimeIfNeeded()` | [src/main.cpp](src/main.cpp) | verified |
 | `formatNextWakeTime()` guard | `if (now <= 100000) return "unknown";` | [src/main.cpp](src/main.cpp) | verified |
@@ -48,6 +49,14 @@ The symbols below are verified against the current repository snapshot and are n
 ### 2.2 Logging Convention for New Code
 
 `telegramSendDebug` level semantics are already defined in [include/telegram.h](include/telegram.h): `0` = minimal, `1` = normal, `2` = verbose. The new `gh_ota.cpp` module (section 14, Phase 1) must reuse this convention exactly and must not define a separate OTA-only level mapping.
+
+### 2.3 Boot-Time OTA Safety
+
+- Runtime settings are loaded before deciding whether to open the local ArduinoOTA startup window.
+- Routine timer wakes skip that window when maintenance mode and OTA recovery are inactive. Automatic GitHub checks run after wake-cycle telemetry and before scheduled sleep, subject to the existing daily-check and battery gates.
+- Crash-like resets skip both the ArduinoOTA startup window and automatic GitHub checks for that boot. The normal sleep policy still runs, preventing a repeated OTA panic from keeping a battery-powered device awake.
+- A software reset after GitHub OTA installation skips the local OTA window, then initializes GitHub OTA after Telegram and MQTT are ready to confirm the new image without immediately starting another check.
+- Manual GitHub OTA commands retain lazy initialization, so OTA remains available in maintenance mode.
 
 ## 3. Target Outcomes
 
@@ -245,6 +254,13 @@ For this project, treat Wi-Fi as stable if:
 1. Wi-Fi status is connected.
 2. RSSI threshold (`GH_OTA_WIFI_STABLE_RSSI_MIN`, default `-85 dBm`) is **defined but not currently enforced** — the install/check gates solely on the `ghOtaHealthProbe()` HTTPS reachability. The RSSI value is still surfaced via `/netdiag` for the operator. See swarm review M-1 (v0.1.3).
 3. A short HTTPS request to GitHub API succeeds — concretely, `GET https://api.github.com/rate_limit` with the standard headers from 5.6.2 (minus `Authorization` if no token), with timeout from `GH_OTA_HTTP_TIMEOUT_MS` (current build default: `12000 ms`). This endpoint is used specifically because it is cheap, does not count meaningfully against API rate limits, and requires no repo-specific parameters — it is purely a reachability probe, not a real check. This is the exact implementation of `ghOtaHealthProbe()` (14, Phase 1 Module API), reused unchanged by both 6.3 and the post-boot health confirmation in 8.3.
+
+The automatic check closes Telegram's TLS connection before this probe. If the
+device resets abnormally during an automatic check, the next boot disables
+automatic checks in NVS and reports the retained OTA stage and minimum free task
+stack via Telegram. Manual checks remain available; `/otaupdate_auto_on` explicitly
+re-enables automatic checks. If saving the setting fails, automatic checks stay
+suspended in RTC memory and the device retries saving on subsequent boots.
 
 If unstable:
 

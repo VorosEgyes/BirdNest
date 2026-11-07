@@ -65,7 +65,7 @@
 					)
 				)
 			)
-			(property "Description" ""
+			(property "Description" "SMT Holder for 18650 Battery"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -74,6 +74,7 @@
 					(font
 						(size 1.27 1.27)
 					)
+					(justify bottom)
 				)
 			)
 			(property "MF" "Keystone Electronics Corp."
@@ -185,18 +186,6 @@
 				)
 			)
 			(property "Purchase-URL" "https://www.snapeda.com/api/url_track_click_mouser/?unipart_id=5138169&manufacturer=Keystone Electronics Corp.&part_name=1042&search_term=smt holder for 18650 battery"
-				(at 0 0 0)
-				(show_name no)
-				(do_not_autoplace no)
-				(hide yes)
-				(effects
-					(font
-						(size 1.27 1.27)
-					)
-					(justify bottom)
-				)
-			)
-			(property "Description_1" "SMT Holder for 18650 Battery"
 				(at 0 0 0)
 				(show_name no)
 				(do_not_autoplace no)
@@ -3399,6 +3388,307 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Transistor_FET:Q_PMOS_GSD"
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "Q"
+				(at 5.08 1.905 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "Q_PMOS_GSD"
+				(at 5.08 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 5.08 2.54 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "P-MOSFET transistor, gate/source/drain"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "transistor PMOS P-MOS P-MOSFET"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Q_PMOS_GSD_0_1"
+				(polyline
+					(pts
+						(xy 0.254 1.905) (xy 0.254 -1.905)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.254 0) (xy -2.54 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 2.286) (xy 0.762 1.27)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 1.778) (xy 3.302 1.778) (xy 3.302 -1.778) (xy 0.762 -1.778)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 0.508) (xy 0.762 -0.508)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 0.762 -1.27) (xy 0.762 -2.286)
+					)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 1.651 0)
+					(radius 2.794)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.286 0) (xy 1.27 0.381) (xy 1.27 -0.381) (xy 2.286 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.54 2.54) (xy 2.54 1.778)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center 2.54 1.778)
+					(radius 0.254)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(circle
+					(center 2.54 -1.778)
+					(radius 0.254)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.54 -2.54) (xy 2.54 0) (xy 0.762 0)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 2.921 -0.381) (xy 3.683 -0.381)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts
+						(xy 3.302 -0.381) (xy 2.921 0.254) (xy 3.683 0.254) (xy 3.302 -0.381)
+					)
+					(stroke
+						(width 0)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "Q_PMOS_GSD_1_1"
+				(pin input line
+					(at -5.08 0 0)
+					(length 2.54)
+					(name "G"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 -5.08 90)
+					(length 2.54)
+					(name "S"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 2.54 5.08 270)
+					(length 2.54)
+					(name "D"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
 		(symbol "VXO7803-500:VXO7803-500"
 			(pin_names
 				(offset 1.016)
@@ -4177,22 +4467,16 @@
 		)
 	)
 	(junction
-		(at 60.96 83.82)
+		(at 46.99 121.92)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "07342df5-9b67-4e0b-b6a5-9ab73227aed5")
+		(uuid "219e1c49-dfb2-48c2-be10-bd152a3a356d")
 	)
 	(junction
-		(at 60.96 71.12)
+		(at 85.09 113.03)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "200a34c2-ec06-426a-afac-7b229192f250")
-	)
-	(junction
-		(at 80.01 100.33)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "2f2bb94c-2ee5-4e59-825c-dce32e9b4143")
+		(uuid "23d69838-d7aa-45b2-bc59-b7928c15961e")
 	)
 	(junction
 		(at 90.17 39.37)
@@ -4213,12 +4497,6 @@
 		(uuid "42107053-fafc-419d-894d-18622be18280")
 	)
 	(junction
-		(at 80.01 90.17)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "4a1ad567-cf1c-495b-8a2d-701a5c074a34")
-	)
-	(junction
 		(at 163.83 36.83)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4235,12 +4513,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "6cd11941-e3a0-4470-8a1b-c48fc6cb081c")
-	)
-	(junction
-		(at 80.01 110.49)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "6fadc3fc-5b4c-4003-8984-ac5e1b6f31c7")
 	)
 	(junction
 		(at 215.9 39.37)
@@ -4273,6 +4545,12 @@
 		(uuid "918e1910-eb5c-4d04-a58f-28aaae21b316")
 	)
 	(junction
+		(at 72.39 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "965094f9-a2ac-47e5-abf8-f757b2eb7a35")
+	)
+	(junction
 		(at 82.55 41.91)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4289,6 +4567,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "a7db4643-896a-474a-aa72-fd4a0331787a")
+	)
+	(junction
+		(at 72.39 102.87)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ac6265f3-57f6-4506-9a17-c4e912c1e0e1")
 	)
 	(junction
 		(at 203.2 64.77)
@@ -4321,6 +4605,12 @@
 		(uuid "e08f0f8a-135a-47d9-9190-80c6ca442f5c")
 	)
 	(junction
+		(at 57.15 102.87)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "e2db7715-9edb-4161-8b6c-6495142bc504")
+	)
+	(junction
 		(at 152.4 36.83)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -4331,6 +4621,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "ec4a3e14-4caf-4bb0-97a2-1f1f9cf602fc")
+	)
+	(junction
+		(at 66.04 113.03)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "f4ffa5c2-11f6-4867-a61c-108ec993df5f")
 	)
 	(junction
 		(at 215.9 102.87)
@@ -4400,26 +4696,6 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 100.33) (xy 82.55 100.33)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "08b46922-410c-4ff7-a692-b2145d490f18")
-	)
-	(wire
-		(pts
-			(xy 80.01 90.17) (xy 68.58 90.17)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "0db3dcd0-8f5e-4645-b69b-d926d32c8bb6")
-	)
-	(wire
-		(pts
 			(xy 157.48 83.82) (xy 157.48 90.17)
 		)
 		(stroke
@@ -4430,13 +4706,13 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 99.06) (xy 80.01 100.33)
+			(xy 85.09 121.92) (xy 85.09 123.19)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "11290986-1839-41f2-89d1-35679b51972b")
+		(uuid "116dcbfc-4bce-4835-a6d1-dc6e26a916df")
 	)
 	(wire
 		(pts
@@ -4457,6 +4733,16 @@
 			(type default)
 		)
 		(uuid "141b8628-dc77-4f34-b717-53e2894aac06")
+	)
+	(wire
+		(pts
+			(xy 46.99 121.92) (xy 46.99 120.65)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "14442b2d-df36-4daf-903d-9f624f79ddd6")
 	)
 	(wire
 		(pts
@@ -4490,23 +4776,13 @@
 	)
 	(wire
 		(pts
-			(xy 60.96 71.12) (xy 60.96 73.66)
+			(xy 46.99 102.87) (xy 46.99 105.41)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "2071a3b7-547e-47b5-a38f-43261cbb6918")
-	)
-	(wire
-		(pts
-			(xy 60.96 86.36) (xy 60.96 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "20894807-2470-403b-891a-ca14ef5c34e2")
+		(uuid "1f04150c-b8cf-4859-af03-757d9e9eefd4")
 	)
 	(wire
 		(pts
@@ -4547,6 +4823,26 @@
 			(type default)
 		)
 		(uuid "28dd1ac0-cc0b-453d-ba11-5d890a038ff5")
+	)
+	(wire
+		(pts
+			(xy 63.5 121.92) (xy 66.04 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "296159c5-882c-4fa0-a1fb-1c2ea6b812fc")
+	)
+	(wire
+		(pts
+			(xy 66.04 113.03) (xy 66.04 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "29b3d5e0-083b-4027-a7ba-7ab063072f77")
 	)
 	(wire
 		(pts
@@ -4610,6 +4906,16 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 111.76) (xy 72.39 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "34534226-d9a0-4d92-aefe-97035e4b0a8c")
+	)
+	(wire
+		(pts
 			(xy 149.86 97.79) (xy 149.86 90.17)
 		)
 		(stroke
@@ -4630,23 +4936,13 @@
 	)
 	(wire
 		(pts
-			(xy 55.88 107.95) (xy 55.88 110.49)
+			(xy 72.39 104.14) (xy 72.39 102.87)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "3c3be438-8ad4-46c7-99a3-7d237ba610fc")
-	)
-	(wire
-		(pts
-			(xy 60.96 81.28) (xy 60.96 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "3ec08de0-c5fb-4969-a9e2-c854e3a98a4c")
+		(uuid "44f4b12f-7df0-47ef-8b72-9911c72ae656")
 	)
 	(wire
 		(pts
@@ -4660,6 +4956,26 @@
 	)
 	(wire
 		(pts
+			(xy 46.99 102.87) (xy 57.15 102.87)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4744628e-9fe7-4b60-84ef-69afe9749338")
+	)
+	(wire
+		(pts
+			(xy 88.9 113.03) (xy 85.09 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "47b4a79d-c5ee-4d62-b263-704af2b19b6b")
+	)
+	(wire
+		(pts
 			(xy 219.71 115.57) (xy 214.63 115.57)
 		)
 		(stroke
@@ -4667,16 +4983,6 @@
 			(type default)
 		)
 		(uuid "493c979c-2d39-4781-98ba-3a38d28323a4")
-	)
-	(wire
-		(pts
-			(xy 80.01 90.17) (xy 80.01 91.44)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "4c4c39d7-9620-4441-89c8-a968ddbf763b")
 	)
 	(wire
 		(pts
@@ -4770,13 +5076,13 @@
 	)
 	(wire
 		(pts
-			(xy 68.58 71.12) (xy 68.58 78.74)
+			(xy 46.99 121.92) (xy 55.88 121.92)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "7089fc31-5195-411d-ba7b-c5e38c463619")
+		(uuid "6e13b5b3-264d-4537-bd9f-440ed2eb66b7")
 	)
 	(wire
 		(pts
@@ -4790,6 +5096,16 @@
 	)
 	(wire
 		(pts
+			(xy 85.09 114.3) (xy 85.09 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "73fb2788-7c4b-4158-bd73-079ae6327dd1")
+	)
+	(wire
+		(pts
 			(xy 146.05 26.67) (xy 148.59 26.67)
 		)
 		(stroke
@@ -4797,16 +5113,6 @@
 			(type default)
 		)
 		(uuid "7b08db38-b467-4b83-9842-15119d21d021")
-	)
-	(wire
-		(pts
-			(xy 55.88 110.49) (xy 80.01 110.49)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7b7e2acc-298c-4b61-ab82-b5e2dce567e0")
 	)
 	(wire
 		(pts
@@ -4920,13 +5226,13 @@
 	)
 	(wire
 		(pts
-			(xy 80.01 88.9) (xy 80.01 90.17)
+			(xy 57.15 102.87) (xy 57.15 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "a5f6306a-f4ba-48d2-8856-1eb442321185")
+		(uuid "a7450782-5dc7-4bc4-9eab-e6197fcdfed4")
 	)
 	(wire
 		(pts
@@ -4980,13 +5286,13 @@
 	)
 	(wire
 		(pts
-			(xy 55.88 71.12) (xy 55.88 92.71)
+			(xy 66.04 113.03) (xy 66.04 121.92)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "af53d30b-0b85-45fc-ab3d-594a00cad0d9")
+		(uuid "b11016c6-df9c-4d70-b21c-70088f940ce7")
 	)
 	(wire
 		(pts
@@ -5000,6 +5306,16 @@
 	)
 	(wire
 		(pts
+			(xy 78.74 102.87) (xy 72.39 102.87)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b3530a8b-c0f5-45a9-afe4-88c6c8d08226")
+	)
+	(wire
+		(pts
 			(xy 149.86 78.74) (xy 167.64 78.74)
 		)
 		(stroke
@@ -5007,16 +5323,6 @@
 			(type default)
 		)
 		(uuid "b5265a61-e76f-4e10-9797-9541597c1d5a")
-	)
-	(wire
-		(pts
-			(xy 55.88 71.12) (xy 60.96 71.12)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "b900d2c5-4f1c-4b79-b609-8bda220bef3c")
 	)
 	(wire
 		(pts
@@ -5030,23 +5336,13 @@
 	)
 	(wire
 		(pts
-			(xy 92.71 100.33) (xy 95.25 100.33)
+			(xy 64.77 113.03) (xy 66.04 113.03)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "c057d68c-b69e-4aa3-9a55-4135a1f53c5e")
-	)
-	(wire
-		(pts
-			(xy 80.01 110.49) (xy 80.01 111.76)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c263c34d-4891-4bca-b25c-b202020713e7")
+		(uuid "bbf20769-2dd2-4ee4-bb53-bd06101ef5b0")
 	)
 	(wire
 		(pts
@@ -5057,6 +5353,16 @@
 			(type default)
 		)
 		(uuid "c2ed86b4-34e7-4e54-aa3f-6412e0e7b136")
+	)
+	(wire
+		(pts
+			(xy 72.39 113.03) (xy 85.09 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c3cf4a2c-d27a-44c2-a1a4-c8a9e71dbdc3")
 	)
 	(wire
 		(pts
@@ -5190,23 +5496,13 @@
 	)
 	(wire
 		(pts
-			(xy 68.58 90.17) (xy 68.58 88.9)
+			(xy 57.15 102.87) (xy 60.96 102.87)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "d2810665-0c27-4c8c-8e51-2c3dc171dcb1")
-	)
-	(wire
-		(pts
-			(xy 80.01 109.22) (xy 80.01 110.49)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "da3c1dd3-349c-47dc-b83f-7ef973dea015")
+		(uuid "de61202b-c528-438c-b30f-1e793eb08f16")
 	)
 	(wire
 		(pts
@@ -5220,6 +5516,26 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 102.87) (xy 71.12 102.87)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e1946e5b-2222-428c-9f64-2dd704c97a9a")
+	)
+	(wire
+		(pts
+			(xy 72.39 123.19) (xy 72.39 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e20650b1-50e1-4ed5-ac65-f95a7a438da1")
+	)
+	(wire
+		(pts
 			(xy 154.94 36.83) (xy 163.83 36.83)
 		)
 		(stroke
@@ -5230,6 +5546,16 @@
 	)
 	(wire
 		(pts
+			(xy 72.39 113.03) (xy 72.39 114.3)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e4f7d627-f08f-4be1-b2b7-d2fba2de929f")
+	)
+	(wire
+		(pts
 			(xy 138.43 26.67) (xy 135.89 26.67)
 		)
 		(stroke
@@ -5237,16 +5563,6 @@
 			(type default)
 		)
 		(uuid "e89492c4-3b42-4317-ad80-8e3299a6b7ef")
-	)
-	(wire
-		(pts
-			(xy 80.01 100.33) (xy 80.01 101.6)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "eabb15f3-4cc3-4bf8-aade-1eb05a0043f5")
 	)
 	(wire
 		(pts
@@ -5280,6 +5596,16 @@
 	)
 	(wire
 		(pts
+			(xy 46.99 123.19) (xy 46.99 121.92)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f902d2c9-5b0c-4116-9b97-2d11818e2551")
+	)
+	(wire
+		(pts
 			(xy 135.89 22.86) (xy 142.24 22.86)
 		)
 		(stroke
@@ -5297,16 +5623,6 @@
 			(type default)
 		)
 		(uuid "fae9c937-369d-4d6d-945a-c4b0a0eaf067")
-	)
-	(wire
-		(pts
-			(xy 60.96 71.12) (xy 68.58 71.12)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "fba3c255-5325-4e0e-8b85-2fa503eda514")
 	)
 	(wire
 		(pts
@@ -5368,16 +5684,6 @@
 		)
 		(uuid "294e0e7b-f66a-48d6-a321-152dd29e9d37")
 	)
-	(label "BAT_MON"
-		(at 95.25 100.33 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "8b3da4b6-f08a-448e-a7b8-507d1aea80f4")
-	)
 	(label "+5V"
 		(at 149.86 105.41 0)
 		(effects
@@ -5408,6 +5714,16 @@
 		)
 		(uuid "b8d0fdbd-db55-4a1a-975c-8f24b1b99143")
 	)
+	(label "BAT_RAW"
+		(at 78.74 102.87 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b9ced471-ec41-47c7-b080-a645f1d09cee")
+	)
 	(label "+3V3"
 		(at 219.71 102.87 0)
 		(effects
@@ -5417,6 +5733,16 @@
 			(justify left bottom)
 		)
 		(uuid "c03dfc96-c837-4ecb-82dd-1f96b42488fe")
+	)
+	(label "BAT_MON"
+		(at 88.9 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "dcb98885-eecd-45f1-8367-19a7dc74ef63")
 	)
 	(label "TEMP. SIG."
 		(at 176.53 87.63 0)
@@ -5513,6 +5839,257 @@
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Batteryholder:1042")
+		(at 46.99 113.03 90)
+		(mirror x)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "10ecd321-ea16-498b-8228-33c517751a70")
+		(property "Reference" "BT1"
+			(at 43.18 111.1249 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Battery"
+			(at 43.18 113.6649 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "1042:BAT_1042"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Datasheet" ""
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "SMT Holder for 18650 Battery"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "MF" "Keystone Electronics Corp."
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "MAXIMUM_PACKAGE_HEIGHT" "15.11mm"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Package" "NON STANDARD-5 Keystone"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Price" "None"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Check_prices" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=eda"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "STANDARD" "Manufacturer Recommendations"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "PARTREV" "E"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "SnapEDA_Link" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=snap"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "MP" "1042"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Purchase-URL" "https://www.snapeda.com/api/url_track_click_mouser/?unipart_id=5138169&manufacturer=Keystone Electronics Corp.&part_name=1042&search_term=smt holder for 18650 battery"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Description_1" "SMT Holder for 18650 Battery"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "SNAPEDA_PN" "1042"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "Availability" "In Stock"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(property "MANUFACTURER" "Keystone"
+			(at 46.99 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify bottom)
+			)
+		)
+		(pin "N"
+			(uuid "65daae24-9aa5-4f7e-a554-a34a871b46de")
+		)
+		(pin "P"
+			(uuid "a23c9abc-87be-4257-a7bb-cb2948e9c626")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "BT1")
 					(unit 1)
 				)
 			)
@@ -5920,8 +6497,9 @@
 		)
 	)
 	(symbol
-		(lib_id "power:-BATT")
-		(at 80.01 111.76 180)
+		(lib_id "Transistor_FET:Q_PMOS_GSD")
+		(at 66.04 105.41 270)
+		(mirror x)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5929,10 +6507,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "33653926-7e4d-4c7b-9e8d-5a47e073d8a0")
-		(property "Reference" "#PWR03"
-			(at 80.01 107.95 0)
-			(hide yes)
+		(uuid "2311d5a5-89a0-480b-bd86-9bcd6dd56402")
+		(property "Reference" "Q7"
+			(at 66.04 99.06 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5941,8 +6518,8 @@
 				)
 			)
 		)
-		(property "Value" "-BATT"
-			(at 80.01 116.84 0)
+		(property "Value" "DMG2305UX"
+			(at 66.04 96.52 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5951,8 +6528,8 @@
 				)
 			)
 		)
-		(property "Footprint" ""
-			(at 80.01 111.76 0)
+		(property "Footprint" "DMG2305UX:SOT23"
+			(at 68.58 100.33 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5963,7 +6540,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 80.01 111.76 0)
+			(at 66.04 105.41 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5973,8 +6550,8 @@
 				)
 			)
 		)
-		(property "Description" "Power symbol creates a global label with name \"-BATT\""
-			(at 80.01 111.76 0)
+		(property "Description" "P-MOSFET transistor, gate/source/drain"
+			(at 66.04 105.41 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5983,14 +6560,20 @@
 					(size 1.27 1.27)
 				)
 			)
+		)
+		(pin "2"
+			(uuid "4c05533b-9acc-4714-ac75-0d0b3158c649")
 		)
 		(pin "1"
-			(uuid "313abf83-645f-40e8-9766-d257c7600f95")
+			(uuid "cad85326-0a99-4465-b123-064c8a81d75a")
+		)
+		(pin "3"
+			(uuid "c09fbffb-bb02-4b88-a709-3be6a755bea9")
 		)
 		(instances
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "#PWR03")
+					(reference "Q7")
 					(unit 1)
 				)
 			)
@@ -5998,7 +6581,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 80.01 95.25 0)
+		(at 72.39 107.95 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6007,9 +6590,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "3733d229-a880-4936-993a-9e17b1092fba")
-		(property "Reference" "R3"
-			(at 82.55 93.9799 0)
+		(uuid "3152d6c6-7e37-4e19-afc4-fa3b2782a0d3")
+		(property "Reference" "R24"
+			(at 74.93 106.6799 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6019,8 +6602,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "1,5M"
-			(at 82.55 96.5199 0)
+		(property "Value" "2M"
+			(at 74.93 109.2199 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6031,7 +6614,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
-			(at 78.232 95.25 90)
+			(at 70.612 107.95 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6042,7 +6625,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 80.01 95.25 0)
+			(at 72.39 107.95 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6053,7 +6636,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 80.01 95.25 0)
+			(at 72.39 107.95 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6064,266 +6647,15 @@
 			)
 		)
 		(pin "1"
-			(uuid "1168e454-ca13-47a7-ab7e-46f2eedf5133")
+			(uuid "701b8930-3c6b-4652-9987-15cd94330a6e")
 		)
 		(pin "2"
-			(uuid "8a596e1f-d163-4555-a3dd-5ba5b71f5451")
+			(uuid "40f4061c-443d-4d3f-a117-8669b4acd447")
 		)
 		(instances
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "R3")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Batteryholder:1042")
-		(at 55.88 100.33 90)
-		(mirror x)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "38545c91-9de1-478a-a6e8-901e46233456")
-		(property "Reference" "BT1"
-			(at 52.07 98.4249 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Battery"
-			(at 52.07 100.9649 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "1042:BAT_1042"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Datasheet" ""
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "MF" "Keystone Electronics Corp."
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "MAXIMUM_PACKAGE_HEIGHT" "15.11mm"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Package" "NON STANDARD-5 Keystone"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Price" "None"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Check_prices" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=eda"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "STANDARD" "Manufacturer Recommendations"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "PARTREV" "E"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "SnapEDA_Link" "https://www.snapeda.com/parts/1042/Keystone/view-part/?ref=snap"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "MP" "1042"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Purchase-URL" "https://www.snapeda.com/api/url_track_click_mouser/?unipart_id=5138169&manufacturer=Keystone Electronics Corp.&part_name=1042&search_term=smt holder for 18650 battery"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Description_1" "SMT Holder for 18650 Battery"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "SNAPEDA_PN" "1042"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "Availability" "In Stock"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(property "MANUFACTURER" "Keystone"
-			(at 55.88 100.33 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify bottom)
-			)
-		)
-		(pin "N"
-			(uuid "fc21d76a-7c0b-4bf9-9e58-6a4a545c8dbb")
-		)
-		(pin "P"
-			(uuid "7020db1c-9449-4f76-9c88-8e74c2f058ba")
-		)
-		(instances
-			(project "BirdNest_pcb"
-				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "BT1")
+					(reference "R24")
 					(unit 1)
 				)
 			)
@@ -7281,8 +7613,8 @@
 		)
 	)
 	(symbol
-		(lib_id "Jumper:Jumper_2_Open")
-		(at 87.63 100.33 0)
+		(lib_id "power:GND")
+		(at 85.09 123.19 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7290,19 +7622,10 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "702fce78-d170-4af8-818a-0be72e2e823a")
-		(property "Reference" "JP1"
-			(at 87.63 102.616 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "Jumper_2_Open"
-			(at 87.63 96.52 0)
+		(fields_autoplaced yes)
+		(uuid "7001c7ca-129a-47cf-a9ed-196ea76c2f6b")
+		(property "Reference" "#PWR026"
+			(at 85.09 129.54 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7312,8 +7635,18 @@
 				)
 			)
 		)
-		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical"
-			(at 87.63 100.33 0)
+		(property "Value" "GND"
+			(at 85.09 128.27 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 85.09 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7324,7 +7657,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 87.63 100.33 0)
+			(at 85.09 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7334,8 +7667,8 @@
 				)
 			)
 		)
-		(property "Description" "Jumper, 2-pole, open"
-			(at 87.63 100.33 0)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 85.09 123.19 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7346,15 +7679,12 @@
 			)
 		)
 		(pin "1"
-			(uuid "a6c6fe74-4543-45fd-bfa9-73a41174487b")
-		)
-		(pin "2"
-			(uuid "446ddeb9-5e56-4a65-b951-eca3b493ad94")
+			(uuid "22be32a8-753e-49fa-9d66-715a33d850bd")
 		)
 		(instances
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "JP1")
+					(reference "#PWR026")
 					(unit 1)
 				)
 			)
@@ -7435,6 +7765,84 @@
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "NT2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 46.99 123.19 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "76dfea81-5335-4d7d-8fac-4ad7fe28e52a")
+		(property "Reference" "#PWR025"
+			(at 46.99 129.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 46.99 128.27 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 46.99 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 46.99 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 46.99 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "ff7e4d3e-dc89-46aa-8bfe-033d2869e73c")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "#PWR025")
 					(unit 1)
 				)
 			)
@@ -7592,6 +8000,84 @@
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "R10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 72.39 123.19 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "8312be90-ce32-4611-92cc-075c19a8c839")
+		(property "Reference" "#PWR018"
+			(at 72.39 129.54 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "GND"
+			(at 72.39 128.27 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 72.39 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 72.39 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 72.39 123.19 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "95234341-7631-4cb4-9fd9-2384548867c0")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "#PWR018")
 					(unit 1)
 				)
 			)
@@ -7817,6 +8303,87 @@
 		)
 	)
 	(symbol
+		(lib_id "Device:R")
+		(at 59.69 121.92 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "8f8bff65-3d8f-4ff5-8e50-5520cab52cb4")
+		(property "Reference" "R21"
+			(at 57.912 124.714 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100k"
+			(at 58.166 127 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+			(at 59.69 120.142 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 59.69 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 59.69 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "da2aaa8a-1102-4a73-8442-4e0e3da1dadb")
+		)
+		(pin "2"
+			(uuid "a547933b-adab-401f-ac74-45d55d00adc3")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "R21")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:GND")
 		(at 212.09 69.85 0)
 		(unit 1)
@@ -7889,6 +8456,87 @@
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "#PWR06")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 60.96 113.03 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "955a61f5-9e25-47f8-8a02-e7913aad3530")
+		(property "Reference" "R20"
+			(at 59.436 115.57 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1M"
+			(at 59.69 117.856 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
+			(at 60.96 111.252 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 60.96 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 60.96 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5c2c5377-bbc8-44d5-8d2f-b555ea8078e8")
+		)
+		(pin "2"
+			(uuid "e34e7dcf-6a3a-460e-bb7b-b486b8a860af")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "R20")
 					(unit 1)
 				)
 			)
@@ -8208,165 +8856,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:R")
-		(at 60.96 77.47 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "a7d42991-3d1a-4426-8f7f-4ff7da7861d2")
-		(property "Reference" "R14"
-			(at 63.5 76.1999 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "10k"
-			(at 63.5 78.7399 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
-			(at 59.182 77.47 90)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 60.96 77.47 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Resistor"
-			(at 60.96 77.47 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "6d84bc7a-07c1-40b2-9b59-a3f9e71653b9")
-		)
-		(pin "2"
-			(uuid "ba3c8b86-ccad-47be-b0fa-df3b35fa18e0")
-		)
-		(instances
-			(project "BirdNest_pcb"
-				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "R14")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:-BATT")
-		(at 60.96 86.36 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "b1682371-36b6-49c3-8291-4a29a978ce76")
-		(property "Reference" "#PWR018"
-			(at 60.96 82.55 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "-BATT"
-			(at 60.96 91.44 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 60.96 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 60.96 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"-BATT\""
-			(at 60.96 86.36 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "5cec3033-d2cc-46bd-bf7f-6174b39f1982")
-		)
-		(instances
-			(project "BirdNest_pcb"
-				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "#PWR018")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:C_Polarized")
 		(at 153.67 97.79 90)
 		(unit 1)
@@ -8679,92 +9168,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Transistor_FET:FQP27P06")
-		(at 66.04 83.82 0)
-		(mirror x)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "befa1c10-e1c4-4831-9093-a6c79e0207fc")
-		(property "Reference" "Q5"
-			(at 72.39 83.82 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "FQP27P06"
-			(at 74.93 83.82 90)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Package_TO_SOT_THT:TO-220-3_Vertical"
-			(at 71.12 81.915 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-					(italic yes)
-				)
-				(justify left)
-			)
-		)
-		(property "Datasheet" "https://www.onsemi.com/pub/Collateral/FQP27P06-D.PDF"
-			(at 71.12 80.01 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Description" "-27A Id, -60V Vds, QFET P-Channel MOSFET, TO-220"
-			(at 66.04 83.82 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "2"
-			(uuid "b6d889cb-be1a-4cd6-953f-7ff211a483c6")
-		)
-		(pin "3"
-			(uuid "a640635d-993e-4866-b74d-c64a03a57530")
-		)
-		(pin "1"
-			(uuid "bb259f6d-ff1f-4956-8351-379e873e478f")
-		)
-		(instances
-			(project "BirdNest_pcb"
-				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "Q5")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Device:C")
 		(at 153.67 90.17 90)
 		(unit 1)
@@ -8838,83 +9241,6 @@
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
 					(reference "C1")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+BATT")
-		(at 80.01 88.9 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "c6026c69-393c-4933-b6dc-7b48a69d6f35")
-		(property "Reference" "#PWR02"
-			(at 80.01 92.71 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "+BATT"
-			(at 84.582 86.36 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 80.01 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 80.01 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "Power symbol creates a global label with name \"+BATT\""
-			(at 80.01 88.9 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "7a640d79-239d-48e5-8851-ea4bf7808eec")
-		)
-		(instances
-			(project "BirdNest_pcb"
-				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "#PWR02")
 					(unit 1)
 				)
 			)
@@ -9173,6 +9499,88 @@
 	)
 	(symbol
 		(lib_id "Device:C")
+		(at 85.09 118.11 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "d221783e-bfb4-46f2-8268-c36207f66a5e")
+		(property "Reference" "C21"
+			(at 88.9 116.8399 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100nF"
+			(at 88.9 119.3799 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Capacitor_SMD:C_1206_3216Metric_Pad1.33x1.80mm_HandSolder"
+			(at 86.0552 121.92 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 85.09 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 85.09 118.11 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "6a1fe793-fd3f-4a04-a491-f841f7a8edca")
+		)
+		(pin "1"
+			(uuid "45d681d7-1d87-4fcf-815b-0f9c8fb584d9")
+		)
+		(instances
+			(project "BirdNest_pcb"
+				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
+					(reference "C21")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:C")
 		(at 205.74 90.17 90)
 		(unit 1)
 		(body_style 1)
@@ -9253,7 +9661,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 80.01 105.41 0)
+		(at 72.39 118.11 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -9262,9 +9670,9 @@
 		(in_pos_files yes)
 		(dnp no)
 		(fields_autoplaced yes)
-		(uuid "e0af9fc5-b9a2-4f15-a646-5ab541ee4be2")
-		(property "Reference" "R4"
-			(at 82.55 104.1399 0)
+		(uuid "dbc43c5f-4218-4f67-a4e2-8c45f4e9ee1f")
+		(property "Reference" "R26"
+			(at 74.93 116.8399 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9275,7 +9683,7 @@
 			)
 		)
 		(property "Value" "1M"
-			(at 82.55 106.6799 0)
+			(at 74.93 119.3799 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -9286,7 +9694,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P10.16mm_Horizontal"
-			(at 78.232 105.41 90)
+			(at 70.612 118.11 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9297,7 +9705,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 80.01 105.41 0)
+			(at 72.39 118.11 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9308,7 +9716,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 80.01 105.41 0)
+			(at 72.39 118.11 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -9319,15 +9727,15 @@
 			)
 		)
 		(pin "1"
-			(uuid "c9661c70-b7e1-4b44-b053-b24c45a12222")
+			(uuid "f3716370-436e-484c-9ff4-4c1cbff2308d")
 		)
 		(pin "2"
-			(uuid "8c0dd0ff-b598-47c6-97cd-5690b0a5ec53")
+			(uuid "8539db6a-cc9a-4425-9f38-6a6d5b3d8bbd")
 		)
 		(instances
 			(project "BirdNest_pcb"
 				(path "/89abeaff-1b65-4d32-a0bb-ec0f19967e6e"
-					(reference "R4")
+					(reference "R26")
 					(unit 1)
 				)
 			)
