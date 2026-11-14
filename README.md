@@ -316,6 +316,8 @@ Reports `READY` or `NOT READY` with per-check detail.
 
 - `FW_VERSION` is injected at build time from the nearest git tag via `scripts/fw_version_from_git.py`.
 - Local/untagged builds use `0.0.0-dev` as fallback.
+- The shared PlatformIO environment pins `espressif32@7.0.1` (Arduino ESP32
+  2.x); upgrading to Arduino ESP32 3.x requires camera and OTA API migration.
 - CI (`release-ota.yml`) triggers on any `v*` tag push:
   - Builds `[env:release]` (same binary as camX envs)
   - Calculates SHA-256
