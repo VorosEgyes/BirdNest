@@ -329,6 +329,8 @@ Reports `READY` or `NOT READY` with per-check detail.
 - Backoff is reset after 2 consecutive stable WiFi cycles.
 - Manual `/otaupdate_check` and `/otaupdate_now` bypass daily interval and backoff.
 - The Telegram TLS connection is closed before the automatic GitHub health probe.
+  The probe parses only the rate-limit field it needs; failures report HTTP,
+  transport, response length and JSON parsing details through Telegram.
   If an automatic check ends in a crash, the next boot disables automatic checks
   and reports the retained OTA stage and minimum free task stack in bytes through
   Telegram. Manual checks remain available; use `/otaupdate_auto_on` to retry.

@@ -9,3 +9,12 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+The OTA health parser regression test is a standalone host C++ test using
+the project's installed ArduinoJson 6 dependency. After building cam2_ota:
+
+  c++ -std=c++11 -Iinclude -I'.pio/libdeps/cam2_ota/ArduinoJson@6.21.6/src' \
+    test/ota_health/test_ota_health.cpp -o /tmp/birdnest-ota-health-test
+  /tmp/birdnest-ota-health-test
+
+Pass --stdin to additionally check a rate-limit JSON response read from stdin.

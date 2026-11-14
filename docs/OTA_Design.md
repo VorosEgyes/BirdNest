@@ -256,7 +256,13 @@ For this project, treat Wi-Fi as stable if:
 3. A short HTTPS request to GitHub API succeeds — concretely, `GET https://api.github.com/rate_limit` with the standard headers from 5.6.2 (minus `Authorization` if no token), with timeout from `GH_OTA_HTTP_TIMEOUT_MS` (current build default: `12000 ms`). This endpoint is used specifically because it is cheap, does not count meaningfully against API rate limits, and requires no repo-specific parameters — it is purely a reachability probe, not a real check. This is the exact implementation of `ghOtaHealthProbe()` (14, Phase 1 Module API), reused unchanged by both 6.3 and the post-boot health confirmation in 8.3.
 
 The automatic check closes Telegram's TLS connection before this probe. If the
-device resets abnormally during an automatic check, the next boot disables
+probe receives HTTP 200, it validates a filtered JSON response containing a
+numeric `rate.limit`, rather than retaining the entire rate-limit response.
+Probe failures report HTTP code, transport error, response length and JSON
+parser or response-shape error to Telegram on automatic checks, install gating
+and post-install confirmation.
+
+If the device resets abnormally during an automatic check, the next boot disables
 automatic checks in NVS and reports the retained OTA stage and minimum free task
 stack via Telegram. Manual checks remain available; `/otaupdate_auto_on` explicitly
 re-enables automatic checks. If saving the setting fails, automatic checks stay

@@ -1,4 +1,5 @@
 #include "gh_ota.h"
+#include "gh_ota_health.h"
 
 #include "battery.h"
 #include "config.h"
@@ -122,7 +123,8 @@ using ReleasesJsonDocument = BasicJsonDocument<PsramJsonAllocator>;
 static esp_err_t s_lastNativeHttpError = ESP_OK;
 static int s_lastNativeHttpErrno = 0;
 static int s_lastHealthProbeHttpCode = 0;
-static bool s_lastHealthProbeParseError = false;
+static size_t s_lastHealthProbeBodyLength = 0;
+static const char* s_lastHealthProbeParseError = "not_attempted";
 
 static constexpr uint32_t GH_OTA_DAILY_CHECK_SEC         = 86400UL;
 static constexpr float    GH_OTA_MIN_INSTALL_BATTERY_V   = 3.60f;
@@ -771,20 +773,33 @@ void ghOtaRecoverAfterCrash(bool crashLikeReset) {
 
 bool ghOtaHealthProbe() {
     s_lastHealthProbeHttpCode = 0;
-    s_lastHealthProbeParseError = false;
+    s_lastHealthProbeBodyLength = 0;
+    s_lastHealthProbeParseError = "not_attempted";
+    s_lastNativeHttpError = ESP_OK;
+    s_lastNativeHttpErrno = 0;
     if (!s_ghOtaInitialized) return false;
     if (WiFi.status() != WL_CONNECTED) return false;
     const bool trackedCheck = s_otaRuntimeMagic == GH_OTA_RUNTIME_MAGIC &&
         s_otaRuntimeStage == static_cast<uint32_t>(OtaRuntimeStage::HealthProbe);
-    String body; int code = 0;
+    NativeHttpBody body(4096);
+    int code = 0;
     if (trackedCheck) setOtaRuntimeStage(OtaRuntimeStage::HealthProbeHttp);
-    const bool ok = ghHttpGet(String("https://") + OTA_GH_API_HOST + "/rate_limit", "", false, body, code);
+    const bool ok = ghNativeHttpGet(String("https://") + OTA_GH_API_HOST + "/rate_limit",
+                                    "", "application/vnd.github+json", body, code);
     s_lastHealthProbeHttpCode = code;
+    s_lastHealthProbeBodyLength = body.length();
     if (!ok) return false;
     if (trackedCheck) setOtaRuntimeStage(OtaRuntimeStage::HealthProbeParse);
-    StaticJsonDocument<512> doc;
-    s_lastHealthProbeParseError = deserializeJson(doc, body) != DeserializationError::Ok;
-    return !s_lastHealthProbeParseError;
+    s_lastHealthProbeParseError = ghOtaHealthResponseError(body.data(), body.length());
+    return s_lastHealthProbeParseError == nullptr;
+}
+
+static String ghOtaHealthProbeDiagnostics() {
+    return "http=" + String(s_lastHealthProbeHttpCode) +
+           " esp=" + String(static_cast<int>(s_lastNativeHttpError)) +
+           " errno=" + String(s_lastNativeHttpErrno) +
+           " bytes=" + String(static_cast<unsigned long>(s_lastHealthProbeBodyLength)) +
+           " parse=" + String(s_lastHealthProbeParseError ? s_lastHealthProbeParseError : "ok");
 }
 
 GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
@@ -825,11 +840,8 @@ GhOtaCheck ghOtaCheckForUpdate(GhOtaTarget& out, bool manualOverride) {
             setOtaRuntimeStage(OtaRuntimeStage::HealthProbeComplete);
             markWifiStabilityFailure(now);
             mqttOtaEvent("ota_check_fail", OTA_REASON_WIFI_UNSTABLE);
-            telegramSendDebug("[OTA][WARN] automatic health probe failed; check deferred: http=" +
-                              String(s_lastHealthProbeHttpCode) +
-                              " esp=" + String(static_cast<int>(s_lastNativeHttpError)) +
-                              " errno=" + String(s_lastNativeHttpErrno) +
-                              " parse=" + String(s_lastHealthProbeParseError ? "yes" : "no"), 1);
+            telegramSendDebug("[OTA][WARN] automatic health probe failed; check deferred: " +
+                              ghOtaHealthProbeDiagnostics(), 1);
             return GhOtaCheck::Skipped;
         }
         setOtaRuntimeStage(OtaRuntimeStage::HealthProbeComplete);
@@ -1043,7 +1055,8 @@ bool ghOtaInstall(const GhOtaTarget& target, bool manualOverride) {
         if (wifiStatus != WL_CONNECTED || !healthOk) {
             savePendingTarget(target, "wifi_unstable");
             mqttOtaEvent("ota_install_blocked", OTA_REASON_WIFI_UNSTABLE, target.version);
-            telegramSendDebug("[OTA][WARN] install blocked: WiFi not connected or health probe failed health=" + String(healthOk ? "ok" : "fail"), 1);
+            telegramSendDebug("[OTA][WARN] install blocked: WiFi not connected or health probe failed " +
+                              ghOtaHealthProbeDiagnostics(), 1);
             return false;
         }
     } else {
@@ -1255,7 +1268,7 @@ void ghOtaConfirmHealthIfPending() {
     constexpr uint32_t kDelayMs  = 2000;
     bool ok = false;
     for (uint8_t i = 0; i < kAttempts; ++i) {
-        if (WiFi.status() == WL_CONNECTED && ghOtaHealthProbe()) { ok = true; break; }
+        if (ghOtaHealthProbe()) { ok = true; break; }
         if (i + 1 < kAttempts) delay(kDelayMs);
     }
 
@@ -1267,7 +1280,8 @@ void ghOtaConfirmHealthIfPending() {
         } else {
             mqttOtaEvent("ota_update_ok", OTA_REASON_HEALTH_CONFIRMED_DEGRADED, FW_VERSION);
             mqttOtaEvent("ota_check_fail", OTA_REASON_HEALTH_PROBE_FAILED, FW_VERSION);
-            telegramSendDebug("[OTA][WARN] health probe failed, rollback suppressed to preserve device", 0);
+            telegramSendDebug("[OTA][WARN] health probe failed, rollback suppressed to preserve device: " +
+                              ghOtaHealthProbeDiagnostics(), 0);
         }
         clearPendingTarget();
         return;
